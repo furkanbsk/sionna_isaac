@@ -1,0 +1,28 @@
+project:
+  name: isaacsim_sionna_localization
+  seed: 456
+  output_root: isaacsim_sionna/data/raw
+
+runtime:
+  isaac_fps: 60
+  radio_update_hz: 20
+  max_frames: 5400
+
+isaac:
+  headless: true
+  render: false
+  prim_paths:
+    tx: /World/tx
+    rx: /World/rx
+    actors:
+      - /World/humanoid_01
+
+scenario:
+  id: localization_multi_rx
+  scene_usd: isaacsim_sionna/data/scenes_usd/localization_room.usd
+  scene_sionna: isaacsim_sionna/data/scenes_sionna/localization_room.xml
+
+labels:
+  mode: localization
+  target_actor: humanoid_01
+  coordinate_frame: world

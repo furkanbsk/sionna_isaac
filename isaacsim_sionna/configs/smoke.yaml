@@ -1,0 +1,33 @@
+project:
+  name: isaacsim_sionna_smoke
+  seed: 42
+  output_root: isaacsim_sionna/data/raw
+
+runtime:
+  isaac_fps: 30
+  radio_update_hz: 10
+  max_frames: 12
+
+env:
+  conda_env_name: env_isaacsim
+
+isaac:
+  headless: true
+  render: false
+  prim_paths:
+    tx: /World/tx
+    rx: /World/rx
+    actors:
+      - /World/actor_0
+
+scenario:
+  id: smoke_autogen
+  scene_usd: isaacsim_sionna/data/scenes_usd/example.usd
+
+radio:
+  carrier_hz: 3.5e9
+  bandwidth_hz: 20e6
+  num_subcarriers: 64
+
+labels:
+  mode: none

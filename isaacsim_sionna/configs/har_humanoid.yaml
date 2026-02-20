@@ -1,0 +1,34 @@
+project:
+  name: isaacsim_sionna_har
+  seed: 123
+  output_root: isaacsim_sionna/data/raw
+
+runtime:
+  isaac_fps: 60
+  radio_update_hz: 15
+  max_frames: 3600
+
+isaac:
+  headless: true
+  render: false
+  prim_paths:
+    tx: /World/tx
+    rx: /World/rx
+    actors:
+      - /World/humanoid_01
+
+scenario:
+  id: har_humanoid
+  scene_usd: isaacsim_sionna/data/scenes_usd/har_room.usd
+  scene_sionna: isaacsim_sionna/data/scenes_sionna/har_room.xml
+  actor_type: humanoid
+  animation_set: walk_sit_wave
+
+labels:
+  mode: har
+  classes:
+    - idle
+    - walk
+    - sit
+    - wave
+  window_frames: 60

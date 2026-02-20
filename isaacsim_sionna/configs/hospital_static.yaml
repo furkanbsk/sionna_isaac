@@ -1,0 +1,41 @@
+project:
+  name: isaacsim_sionna_hospital_static
+  seed: 42
+  output_root: isaacsim_sionna/data/raw
+
+runtime:
+  isaac_fps: 30
+  radio_update_hz: 10
+  max_frames: 60
+
+env:
+  conda_env_name: env_isaacsim
+
+isaac:
+  headless: true
+  render: false
+  prim_paths:
+    tx: /World/tx
+    rx: /World/rx
+    actors: []
+  anchors:
+    auto_from_bbox: true
+    height_m: 1.5
+    tx_offset_norm: [0.2, 0.2]
+    rx_offset_norm: [0.8, 0.8]
+    max_meshes: 256
+
+scenario:
+  id: hospital_static
+  scene_usd: isaacsim_sionna/data/scenes_usd/hospital.usd
+  scene_sionna_cache: isaacsim_sionna/data/scenes_sionna/cache/hospital_runtime.xml
+
+radio:
+  carrier_hz: 3.5e9
+  bandwidth_hz: 20e6
+  num_subcarriers: 64
+  max_depth: 5
+  samples_per_src: 200000
+
+labels:
+  mode: none

@@ -1,0 +1,36 @@
+project:
+  name: isaacsim_sionna_csi
+  seed: 42
+  output_root: isaacsim_sionna/data/raw
+
+runtime:
+  isaac_fps: 60
+  radio_update_hz: 10
+  max_frames: 600
+
+env:
+  conda_env_name: env_isaacsim
+
+isaac:
+  headless: true
+  render: false
+  prim_paths:
+    tx: /World/tx
+    rx: /World/rx
+    actors:
+      - /World/actor_0
+
+scenario:
+  id: base_static
+  scene_usd: isaacsim_sionna/data/scenes_usd/example.usd
+  scene_sionna: isaacsim_sionna/data/scenes_sionna/example_scene.xml
+
+radio:
+  carrier_hz: 3.5e9
+  bandwidth_hz: 20e6
+  num_subcarriers: 256
+  max_depth: 5
+  samples_per_src: 100000
+
+labels:
+  mode: none
