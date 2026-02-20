@@ -1,0 +1,97 @@
+project:
+  name: isaacsim_sionna_har_los_block
+  seed: 42
+  hash_algo: sha256
+  solver_seed_strategy: frame_offset
+  output_root: isaacsim_sionna/data/raw
+
+runtime:
+  isaac_fps: 30
+  radio_update_rate_hz: 10
+  radio_update_hz: 10
+  frame_skip_ratio:
+  max_frames: 30
+
+env:
+  conda_env_name: env_isaacsim
+
+isaac:
+  headless: true
+  render: false
+  actor_motion:
+    enabled: true
+    update_every_tick: true
+    proxy_half_extent_xyz: [0.6, 0.6, 1.2]
+    actors:
+      - prim_path: /World/humanoid_01
+        motion_type: trajectory
+        trajectory:
+          kind: waypoints
+          loop: false
+          speed_mps: 40.0
+          # Move near LOS across a long segment for sustained RF perturbation.
+          waypoints_xyz:
+            - [-25.0060, -4.2812, 1.5]
+            - [2.0488, 17.9851, 1.5]
+  geometry:
+    mode: mesh
+    mesh:
+      format: ply
+      output_dir: isaacsim_sionna/data/scenes_sionna/runtime_meshes
+      max_meshes: 256
+      include_regex: /Root/
+      exclude_regex:
+  prim_paths:
+    tx: /World/tx
+    rx: /World/rx
+    actors:
+      - /World/humanoid_01
+  anchors:
+    auto_from_bbox: false
+    manual_tx_xyz: [-33.261692, -12.629838, 1.5]
+    manual_rx_xyz: [11.829577, 24.480648, 1.5]
+    height_m: 1.5
+    max_meshes: 256
+
+scenario:
+  id: har_los_block
+  scene_usd: isaacsim_sionna/data/scenes_usd/hospital.usd
+  scene_sionna_cache: isaacsim_sionna/data/scenes_sionna/cache/hospital_runtime.xml
+
+radio:
+  carrier_hz: 3.5e9
+  bandwidth_hz: 20e6
+  num_subcarriers: 64
+  max_depth: 5
+  samples_per_src: 200000
+
+storage:
+  tensor_store:
+    enabled: true
+    format: hdf5
+    path: csi_tensors.h5
+    dtype: complex64
+    compression: gzip
+    chunk_frames: 64
+
+qa:
+  path_count:
+    max_los_only_ratio: 0.8
+  csi_variance:
+    metric: p90
+    adaptive_scale: 1.0e-8
+    abs_floor: 1.0e-12
+  bounds:
+    mode: scene_bbox
+    margin_m: 1.0
+  strict: true
+
+labels:
+  mode: har
+  activity_label: walking
+  classes:
+    - idle
+    - walk
+    - sit
+    - wave
+  window_frames: 60
