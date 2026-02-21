@@ -1,0 +1,204 @@
+{
+  "scene_path": "isaacsim_sionna/data/scenes_usd/hospital.usd",
+  "scene_bbox": null,
+  "scene_center": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "scene_diagonal_m": 20.0,
+  "mesh_count": 0,
+  "timestamp": "2026-02-21T06:07:15.264617",
+  "camera_positions": [
+    {
+      "index": 1,
+      "position_xyz": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "target_xyz": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "description": "Top-down center (20m yukar\u0131dan)",
+      "image_path": "renders/cam_01_Top-down.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 2,
+      "position_xyz": [
+        10.0,
+        10.0,
+        15.0
+      ],
+      "target_xyz": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "description": "Top-down from corner (10,10,15)",
+      "image_path": "renders/cam_02_Top-down.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 3,
+      "position_xyz": [
+        0.0,
+        -10.0,
+        1.5
+      ],
+      "target_xyz": [
+        0.0,
+        0.0,
+        1.5
+      ],
+      "description": "Ground level, looking +X (insan boyu)",
+      "image_path": "renders/cam_03_Ground.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 4,
+      "position_xyz": [
+        -10.0,
+        0.0,
+        1.5
+      ],
+      "target_xyz": [
+        0.0,
+        0.0,
+        1.5
+      ],
+      "description": "Ground level, looking +Y (insan boyu)",
+      "image_path": "renders/cam_04_Ground.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 5,
+      "position_xyz": [
+        8.0,
+        8.0,
+        8.0
+      ],
+      "target_xyz": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "description": "Elevated corner diagonal (8,8,8)",
+      "image_path": "renders/cam_05_Elevated.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 6,
+      "position_xyz": [
+        15.0,
+        0.0,
+        5.0
+      ],
+      "target_xyz": [
+        0.0,
+        0.0,
+        2.5
+      ],
+      "description": "Side view from +X axis (15,0,5)",
+      "image_path": "renders/cam_06_Side.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 7,
+      "position_xyz": [
+        -15.0,
+        0.0,
+        5.0
+      ],
+      "target_xyz": [
+        0.0,
+        0.0,
+        2.5
+      ],
+      "description": "Side view from -X axis (-15,0,5)",
+      "image_path": "renders/cam_07_Side.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 8,
+      "position_xyz": [
+        0.0,
+        15.0,
+        5.0
+      ],
+      "target_xyz": [
+        0.0,
+        0.0,
+        2.5
+      ],
+      "description": "Side view from +Y axis (0,15,5)",
+      "image_path": "renders/cam_08_Side.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 9,
+      "position_xyz": [
+        0.0,
+        -15.0,
+        5.0
+      ],
+      "target_xyz": [
+        0.0,
+        0.0,
+        2.5
+      ],
+      "description": "Side view from -Y axis (0,-15,5)",
+      "image_path": "renders/cam_09_Side.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 10,
+      "position_xyz": [
+        10.0,
+        -10.0,
+        10.0
+      ],
+      "target_xyz": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "description": "Isometric view (10,-10,10)",
+      "image_path": "renders/cam_10_Isometric.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    }
+  ]
+}

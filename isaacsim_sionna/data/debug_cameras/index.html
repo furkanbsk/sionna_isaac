@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera Position Debug - hospital.usd</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: #eee; }
+        h1 { color: #76b900; }
+        .info { background: #2a2a2a; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+        .card { background: #2a2a2a; border-radius: 8px; overflow: hidden; }
+        .card img { width: 100%; height: auto; display: block; }
+        .card-info { padding: 15px; }
+        .card-info h3 { margin: 0 0 10px 0; color: #76b900; }
+        .card-info p { margin: 5px 0; font-size: 13px; }
+        .coord { font-family: monospace; background: #333; padding: 2px 6px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>🎥 Camera Position Debug</h1>
+    <div class="info">
+        <h2>Scene: hospital.usd</h2>
+        <p><strong>Path:</strong> isaacsim_sionna/data/scenes_usd/hospital.usd</p>
+        <p><strong>Mesh Count:</strong> 0</p>
+        <p><strong>Timestamp:</strong> 2026-02-21T06:07:15.264617</p>
+
+    </div>
+    <h2>Camera Views</h2>
+    <div class="grid">
+
+        <div class="card">
+            <img src="renders/cam_01_Top-down.png" alt="Camera 1">
+            <div class="card-info">
+                <h3>#1 - Top-down center (20m yukarıdan)</h3>
+                <p><strong>Position:</strong> <span class="coord">[0.0, 0.0, 20.0]</span></p>
+                <p><strong>Target:</strong> <span class="coord">[0.0, 0.0, 0.0]</span></p>
+                <p><strong>Resolution:</strong> 1280x720</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <img src="renders/cam_02_Top-down.png" alt="Camera 2">
+            <div class="card-info">
+                <h3>#2 - Top-down from corner (10,10,15)</h3>
+                <p><strong>Position:</strong> <span class="coord">[10.0, 10.0, 15.0]</span></p>
+                <p><strong>Target:</strong> <span class="coord">[0.0, 0.0, 0.0]</span></p>
+                <p><strong>Resolution:</strong> 1280x720</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <img src="renders/cam_03_Ground.png" alt="Camera 3">
+            <div class="card-info">
+                <h3>#3 - Ground level, looking +X (insan boyu)</h3>
+                <p><strong>Position:</strong> <span class="coord">[0.0, -10.0, 1.5]</span></p>
+                <p><strong>Target:</strong> <span class="coord">[0.0, 0.0, 1.5]</span></p>
+                <p><strong>Resolution:</strong> 1280x720</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <img src="renders/cam_04_Ground.png" alt="Camera 4">
+            <div class="card-info">
+                <h3>#4 - Ground level, looking +Y (insan boyu)</h3>
+                <p><strong>Position:</strong> <span class="coord">[-10.0, 0.0, 1.5]</span></p>
+                <p><strong>Target:</strong> <span class="coord">[0.0, 0.0, 1.5]</span></p>
+                <p><strong>Resolution:</strong> 1280x720</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <img src="renders/cam_05_Elevated.png" alt="Camera 5">
+            <div class="card-info">
+                <h3>#5 - Elevated corner diagonal (8,8,8)</h3>
+                <p><strong>Position:</strong> <span class="coord">[8.0, 8.0, 8.0]</span></p>
+                <p><strong>Target:</strong> <span class="coord">[0.0, 0.0, 0.0]</span></p>
+                <p><strong>Resolution:</strong> 1280x720</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <img src="renders/cam_06_Side.png" alt="Camera 6">
+            <div class="card-info">
+                <h3>#6 - Side view from +X axis (15,0,5)</h3>
+                <p><strong>Position:</strong> <span class="coord">[15.0, 0.0, 5.0]</span></p>
+                <p><strong>Target:</strong> <span class="coord">[0.0, 0.0, 2.5]</span></p>
+                <p><strong>Resolution:</strong> 1280x720</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <img src="renders/cam_07_Side.png" alt="Camera 7">
+            <div class="card-info">
+                <h3>#7 - Side view from -X axis (-15,0,5)</h3>
+                <p><strong>Position:</strong> <span class="coord">[-15.0, 0.0, 5.0]</span></p>
+                <p><strong>Target:</strong> <span class="coord">[0.0, 0.0, 2.5]</span></p>
+                <p><strong>Resolution:</strong> 1280x720</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <img src="renders/cam_08_Side.png" alt="Camera 8">
+            <div class="card-info">
+                <h3>#8 - Side view from +Y axis (0,15,5)</h3>
+                <p><strong>Position:</strong> <span class="coord">[0.0, 15.0, 5.0]</span></p>
+                <p><strong>Target:</strong> <span class="coord">[0.0, 0.0, 2.5]</span></p>
+                <p><strong>Resolution:</strong> 1280x720</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <img src="renders/cam_09_Side.png" alt="Camera 9">
+            <div class="card-info">
+                <h3>#9 - Side view from -Y axis (0,-15,5)</h3>
+                <p><strong>Position:</strong> <span class="coord">[0.0, -15.0, 5.0]</span></p>
+                <p><strong>Target:</strong> <span class="coord">[0.0, 0.0, 2.5]</span></p>
+                <p><strong>Resolution:</strong> 1280x720</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <img src="renders/cam_10_Isometric.png" alt="Camera 10">
+            <div class="card-info">
+                <h3>#10 - Isometric view (10,-10,10)</h3>
+                <p><strong>Position:</strong> <span class="coord">[10.0, -10.0, 10.0]</span></p>
+                <p><strong>Target:</strong> <span class="coord">[0.0, 0.0, 0.0]</span></p>
+                <p><strong>Resolution:</strong> 1280x720</p>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>

@@ -1,15 +1,12 @@
-"""Runtime bridge from Isaac USD file to Sionna scene XML.
-
-This bridge approximates each USD mesh by its world-axis-aligned box. It is a
-fast, deterministic proxy that uses real scene geometry extents and enables
-multipath with PathSolver.
-"""
+"""Runtime bridge from Isaac USD sources to Sionna scene XML."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 import math
+
+from isaacsim_sionna.bridge.usd_mesh_export import MeshFileRef
 
 
 @dataclass
@@ -101,7 +98,16 @@ def compute_global_bbox(aabbs: list[MeshAabb]) -> dict[str, list[float]]:
     return {"min_xyz": min_xyz, "max_xyz": max_xyz}
 
 
-def build_sionna_xml_from_aabbs(aabbs: list[MeshAabb], output_xml: Path) -> Path:
+def _xml_material_block(lines: list[str]) -> None:
+    lines.append('  <bsdf type="itu-radio-material" id="mat-default">')
+    lines.append('    <string name="type" value="concrete"/>')
+    lines.append('    <float name="thickness" value="0.2"/>')
+    lines.append('  </bsdf>')
+
+
+def build_sionna_xml_from_aabbs(
+    aabbs: list[MeshAabb], output_xml: Path, dynamic_actor_count: int = 0
+) -> Path:
     """Write a Mitsuba/Sionna XML scene with one cube per mesh AABB."""
     if not aabbs:
         raise ValueError("Cannot build Sionna XML: no mesh AABBs")
@@ -111,13 +117,46 @@ def build_sionna_xml_from_aabbs(aabbs: list[MeshAabb], output_xml: Path) -> Path
 
     lines: list[str] = []
     lines.append('<scene version="2.1.0">')
-    lines.append('  <bsdf type="itu-radio-material" id="mat-default">')
-    lines.append('    <string name="type" value="concrete"/>')
-    lines.append('    <float name="thickness" value="0.2"/>')
-    lines.append('  </bsdf>')
+    _xml_material_block(lines)
 
     for i, _ in enumerate(aabbs):
         lines.append(f'  <shape type="cube" id="mesh_box_{i}">')
+        lines.append('    <ref name="bsdf" id="mat-default"/>')
+        lines.append('  </shape>')
+
+    for i in range(max(0, int(dynamic_actor_count))):
+        lines.append(f'  <shape type="cube" id="actor_proxy_{i}">')
+        lines.append('    <ref name="bsdf" id="mat-default"/>')
+        lines.append('  </shape>')
+
+    lines.append('</scene>')
+    output_xml.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return output_xml
+
+
+def build_sionna_xml_from_mesh_files(
+    mesh_refs: list[MeshFileRef], output_xml: Path, dynamic_actor_count: int = 0
+) -> Path:
+    """Write Mitsuba/Sionna XML scene referencing exported mesh files."""
+    if not mesh_refs:
+        raise ValueError("Cannot build Sionna XML: no mesh file refs")
+
+    output_xml = Path(output_xml)
+    output_xml.parent.mkdir(parents=True, exist_ok=True)
+
+    lines: list[str] = []
+    lines.append('<scene version="2.1.0">')
+    _xml_material_block(lines)
+
+    for i, ref in enumerate(mesh_refs):
+        lines.append(f'  <shape type="ply" id="mesh_{i}">')
+        lines.append(f'    <string name="filename" value="{ref.file_path}"/>')
+        lines.append('    <boolean name="face_normals" value="true"/>')
+        lines.append('    <ref name="bsdf" id="mat-default"/>')
+        lines.append('  </shape>')
+
+    for i in range(max(0, int(dynamic_actor_count))):
+        lines.append(f'  <shape type="cube" id="actor_proxy_{i}">')
         lines.append('    <ref name="bsdf" id="mat-default"/>')
         lines.append('  </shape>')
 

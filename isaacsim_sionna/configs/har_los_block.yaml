@@ -18,6 +18,15 @@ env:
 isaac:
   headless: true
   render: false
+  camera:
+    enabled: true
+    name: camera_main
+    prim_path: /World/camera_main
+    position_xyz: [-10.0, -40.0, 20.0]
+    target_xyz: [-10.0, 6.0, 1.5]
+    resolution: [1280, 720]
+    format: png
+    output_subdir: renders
   actor_motion:
     enabled: true
     update_every_tick: true
@@ -81,6 +90,9 @@ qa:
     metric: p90
     adaptive_scale: 1.0e-8
     abs_floor: 1.0e-12
+  frequency_selectivity:
+    metric: p90
+    abs_floor: 5.0e-7
   bounds:
     mode: scene_bbox
     margin_m: 1.0

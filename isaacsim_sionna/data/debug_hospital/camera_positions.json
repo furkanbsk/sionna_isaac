@@ -1,0 +1,196 @@
+{
+  "scene_path": "isaacsim_sionna/data/scenes_usd/hospital.usd",
+  "timestamp": "2026-02-21T15:22:51.655607",
+  "camera_positions": [
+    {
+      "index": 1,
+      "position_xyz": [
+        0.0,
+        0.0,
+        1.5
+      ],
+      "rotation_deg": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "description": "Merkez default",
+      "image_path": "renders/cam_01_Merkez.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 2,
+      "position_xyz": [
+        0.0,
+        0.0,
+        1.5
+      ],
+      "rotation_deg": [
+        0.0,
+        0.0,
+        180.0
+      ],
+      "description": "Merkez Z-rot 180",
+      "image_path": "renders/cam_02_Merkez.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 3,
+      "position_xyz": [
+        0.0,
+        0.0,
+        1.5
+      ],
+      "rotation_deg": [
+        0.0,
+        0.0,
+        90.0
+      ],
+      "description": "Merkez Z-rot 90",
+      "image_path": "renders/cam_03_Merkez.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 4,
+      "position_xyz": [
+        0.0,
+        0.0,
+        1.5
+      ],
+      "rotation_deg": [
+        0.0,
+        0.0,
+        -90.0
+      ],
+      "description": "Merkez Z-rot -90",
+      "image_path": "renders/cam_04_Merkez.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 5,
+      "position_xyz": [
+        -1.0,
+        -1.0,
+        1.5
+      ],
+      "rotation_deg": [
+        0.0,
+        0.0,
+        45.0
+      ],
+      "description": "K\u00f6\u015fe (-1,-1) Z-rot 45",
+      "image_path": "renders/cam_05_K\u00f6\u015fe.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 6,
+      "position_xyz": [
+        3.0,
+        3.0,
+        1.5
+      ],
+      "rotation_deg": [
+        0.0,
+        0.0,
+        225.0
+      ],
+      "description": "K\u00f6\u015fe (3,3) Z-rot 225",
+      "image_path": "renders/cam_06_K\u00f6\u015fe.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 7,
+      "position_xyz": [
+        -3.0,
+        3.0,
+        1.5
+      ],
+      "rotation_deg": [
+        0.0,
+        0.0,
+        -45.0
+      ],
+      "description": "K\u00f6\u015fe (-3,3) Z-rot -45",
+      "image_path": "renders/cam_07_K\u00f6\u015fe.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 8,
+      "position_xyz": [
+        1.0,
+        -1.0,
+        1.5
+      ],
+      "rotation_deg": [
+        0.0,
+        0.0,
+        135.0
+      ],
+      "description": "K\u00f6\u015fe (1,-1) Z-rot 135",
+      "image_path": "renders/cam_08_K\u00f6\u015fe.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 9,
+      "position_xyz": [
+        0.0,
+        -3.0,
+        1.5
+      ],
+      "rotation_deg": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "description": "Kenar (0,-3) default",
+      "image_path": "renders/cam_09_Kenar.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 10,
+      "position_xyz": [
+        0.0,
+        0.0,
+        3.0
+      ],
+      "rotation_deg": [
+        -90.0,
+        0.0,
+        0.0
+      ],
+      "description": "Tepeden X-rot -90 d\u00fc\u015f\u00fck",
+      "image_path": "renders/cam_10_Tepeden.png",
+      "resolution": [
+        1280,
+        720
+      ]
+    }
+  ]
+}

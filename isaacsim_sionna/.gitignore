@@ -5,6 +5,8 @@
 # Runtime-generated Sionna scene cache
 /data/scenes_sionna/cache/*
 !/data/scenes_sionna/cache/.gitkeep
+/data/scenes_sionna/runtime_meshes/*
+!/data/scenes_sionna/runtime_meshes/.gitkeep
 
 # Python cache
 __pycache__/

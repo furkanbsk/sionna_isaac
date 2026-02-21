@@ -15,6 +15,7 @@ from typing import Any
 
 from isaacsim_sionna.bridge.actor_motion import ActorMotionManager, angular_velocity_from_quats
 from isaacsim_sionna.bridge.camera_adapter import CameraAdapter
+from isaacsim_sionna.bridge.ray_visualizer import RayVisualizer
 from isaacsim_sionna.bridge.usd_to_sionna import compute_global_bbox, extract_mesh_aabbs_from_usd_file
 from isaacsim_sionna.utils.reproducibility import seed_isaac_runtime
 
@@ -33,6 +34,7 @@ class IsaacAdapter:
         geometry_cfg = isaac_cfg.get("geometry", {})
         mesh_cfg = geometry_cfg.get("mesh", {})
         camera_cfg = isaac_cfg.get("camera", {})
+        ray_viz_cfg = isaac_cfg.get("ray_viz", {})
         actor_motion_cfg = isaac_cfg.get("actor_motion", {})
         project_cfg = config.get("project", {})
 
@@ -66,6 +68,8 @@ class IsaacAdapter:
         self.geometry_mesh_exclude_regex = mesh_cfg.get("exclude_regex")
         self.geometry_mesh_max_meshes = int(mesh_cfg.get("max_meshes", 256))
         self.camera_enabled = bool(camera_cfg.get("enabled", False))
+        self.visualize_rays = bool(isaac_cfg.get("visualize_rays", False))
+        self._ray_viz_draw_only_when_rendering = bool(ray_viz_cfg.get("draw_only_when_rendering", True))
         self.seed = int(project_cfg.get("seed", 42))
 
         self._simulation_app = None
@@ -90,6 +94,8 @@ class IsaacAdapter:
         self._set_world_pose = None
         self._prev_actor_state: dict[str, dict[str, Any]] = {}
         self._camera_adapter: CameraAdapter | None = None
+        self._ray_visualizer: RayVisualizer | None = None
+        self._ray_visualization_ready = False
 
     def _ensure_started(self) -> None:
         if self._simulation_app is None or self._world is None:
@@ -357,12 +363,18 @@ class IsaacAdapter:
                 err = self._camera_adapter.init_error
                 print(f"[IsaacAdapter] WARN: camera disabled due to init failure ({err})")
                 self._camera_adapter = None
+        if self.visualize_rays and (self.render or not self._ray_viz_draw_only_when_rendering):
+            self._ray_visualizer = RayVisualizer(self.config)
+            self._ray_visualization_ready = bool(self._ray_visualizer.initialize())
+        else:
+            self._ray_visualization_ready = False
 
         print(
             f"[IsaacAdapter] started headless={self.headless} render={self.render} "
             f"stage_source={self._stage_source} meshes={len(self._mesh_aabbs)} "
             f"seed={self.seed} isaac_seeded={isaac_seeded} "
-            f"camera_enabled={self.camera_enabled} camera_ready={self._camera_adapter is not None}"
+            f"camera_enabled={self.camera_enabled} camera_ready={self._camera_adapter is not None} "
+            f"visualize_rays={self.visualize_rays} ray_viz_ready={self._ray_visualization_ready}"
         )
 
     def step(self) -> None:
@@ -403,6 +415,17 @@ class IsaacAdapter:
         if self._camera_adapter is None:
             return None
         return self._camera_adapter.capture(frame_idx=frame_idx)
+
+    def ray_visualization_enabled(self) -> bool:
+        """Whether GUI path visualization is active."""
+        return bool(self._ray_visualization_ready and self._ray_visualizer is not None)
+
+    def render_paths(self, path_geometry: list[dict[str, Any]] | None) -> None:
+        """Render path polylines in the viewport if debug drawing is enabled."""
+        self._ensure_started()
+        if self._ray_visualizer is None or not self._ray_visualization_ready:
+            return
+        self._ray_visualizer.draw_paths(path_geometry)
 
     def get_state(self) -> dict:
         """Return current simulation state and tracked poses."""
@@ -487,6 +510,13 @@ class IsaacAdapter:
             except Exception:
                 pass
             self._camera_adapter = None
+        if self._ray_visualizer is not None:
+            try:
+                self._ray_visualizer.close()
+            except Exception:
+                pass
+            self._ray_visualizer = None
+            self._ray_visualization_ready = False
 
         if self._simulation_app is not None:
             try:

@@ -113,6 +113,12 @@ class Pipeline:
                     snapshot = self.sionna.compute_snapshot(frame_idx=frame_idx)
                     path_solver_times.append(time.perf_counter() - t1)
                     snapshot["timestamp_sim"] = state.get("timestamp_sim")
+                    if hasattr(self.isaac, "ray_visualization_enabled") and self.isaac.ray_visualization_enabled():
+                        path_geometry = (
+                            self.sionna.get_last_path_geometry() if hasattr(self.sionna, "get_last_path_geometry") else []
+                        )
+                        if hasattr(self.isaac, "render_paths"):
+                            self.isaac.render_paths(path_geometry)
                     render_ref = None
                     if hasattr(self.isaac, "capture_rgb"):
                         tcam = time.perf_counter()

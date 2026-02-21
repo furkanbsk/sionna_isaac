@@ -18,6 +18,13 @@ env:
 isaac:
   headless: false
   render: true
+  visualize_rays: true
+  ray_viz:
+    los_color_rgba: [1.0, 0.1, 0.1, 1.0]
+    nlos_color_rgba: [0.2, 0.7, 1.0, 1.0]
+    line_width: 2.0
+    max_paths_to_draw: 128
+    draw_only_when_rendering: true
   camera:
     enabled: true
     backend: replicator

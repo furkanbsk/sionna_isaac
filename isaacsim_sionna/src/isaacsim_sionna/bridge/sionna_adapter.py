@@ -58,6 +58,10 @@ class SionnaAdapter:
         self._mesh_count = 0
         self._mesh_file_count = 0
         self._geometry_mode = "aabb"
+        self._visualize_rays = bool(self.isaac_cfg.get("visualize_rays", False))
+        ray_viz_cfg = self.isaac_cfg.get("ray_viz", {}) if isinstance(self.isaac_cfg, dict) else {}
+        self._max_paths_to_draw = int(ray_viz_cfg.get("max_paths_to_draw", 128))
+        self._last_path_geometry: list[dict] = []
         self._dynamic_actor_paths: list[str] = []
         self._dynamic_actor_proxy_map: dict[str, str] = {}
         self._actor_proxy_half_extent = [0.25, 0.25, 0.9]
@@ -358,6 +362,88 @@ class SionnaAdapter:
                     f"[SionnaAdapter] WARN: PathSolver does not support '{bad_key}'. Falling back without it.",
                 )
 
+    def _extract_path_polylines(self, paths: object) -> list[dict]:
+        """Extract receiver-reaching path polylines for debug visualization."""
+        try:
+            vertices = paths.vertices.numpy()
+            valid = paths.valid.numpy()
+            interactions = paths.interactions.numpy()
+            src_positions = paths.sources.numpy().T
+            tgt_positions = paths.targets.numpy().T
+        except Exception as exc:
+            self._warn_once("path_extract_base", f"[SionnaAdapter] WARN: path extraction failed: {exc}")
+            return []
+
+        max_depth = int(vertices.shape[0])
+        num_paths = int(vertices.shape[-2]) if vertices.ndim >= 2 else 0
+        if num_paths <= 0:
+            return []
+
+        num_src = int(src_positions.shape[0]) if src_positions.ndim >= 2 else 0
+        num_tgt = int(tgt_positions.shape[0]) if tgt_positions.ndim >= 2 else 0
+
+        try:
+            if not bool(getattr(paths, "synthetic_array", True)):
+                num_rx = int(paths.num_rx)
+                rx_array_size = int(paths.rx_array.array_size)
+                num_rx_patterns = int(len(paths.rx_array.antenna_pattern.patterns))
+                num_tx = int(paths.num_tx)
+                tx_array_size = int(paths.tx_array.array_size)
+                num_tx_patterns = int(len(paths.tx_array.antenna_pattern.patterns))
+
+                vertices = np.reshape(
+                    vertices,
+                    [max_depth, num_rx, num_rx_patterns, rx_array_size, num_tx, num_tx_patterns, tx_array_size, -1, 3],
+                )
+                valid = np.reshape(valid, [num_rx, num_rx_patterns, rx_array_size, num_tx, num_tx_patterns, tx_array_size, -1])
+                interactions = np.reshape(
+                    interactions,
+                    [max_depth, num_rx, num_rx_patterns, rx_array_size, num_tx, num_tx_patterns, tx_array_size, -1],
+                )
+
+                vertices = vertices[:, :, 0, :, :, 0, :, :, :]
+                valid = valid[:, 0, :, :, 0, :, :]
+                interactions = interactions[:, :, 0, :, :, 0, :, :]
+                vertices = np.reshape(vertices, [max_depth, num_tgt, num_src, -1, 3])
+                valid = np.reshape(valid, [num_tgt, num_src, -1])
+                interactions = np.reshape(interactions, [max_depth, num_tgt, num_src, -1])
+        except Exception as exc:
+            self._warn_once("path_extract_reshape", f"[SionnaAdapter] WARN: path extraction reshape failed: {exc}")
+            return []
+
+        out: list[dict] = []
+        max_out = max(1, int(self._max_paths_to_draw))
+        for rx in range(num_tgt):
+            for tx in range(num_src):
+                for p in range(num_paths):
+                    if len(out) >= max_out:
+                        return out
+                    try:
+                        if not bool(valid[rx, tx, p]):
+                            continue
+                    except Exception:
+                        continue
+
+                    src = [float(v) for v in src_positions[tx]]
+                    tgt = [float(v) for v in tgt_positions[rx]]
+                    points = [src]
+                    is_los = True
+
+                    for i in range(max_depth):
+                        t = int(interactions[i, rx, tx, p])
+                        if t == 0:
+                            break
+                        is_los = False
+                        v = vertices[i, rx, tx, p]
+                        points.append([float(v[0]), float(v[1]), float(v[2])])
+                    points.append(tgt)
+                    out.append({"points_xyz": points, "is_los": bool(is_los)})
+        return out
+
+    def get_last_path_geometry(self) -> list[dict]:
+        """Return extracted path polylines from the latest snapshot call."""
+        return list(self._last_path_geometry)
+
     def _cir_to_ofdm_explicit(self, a_flat: np.ndarray, tau_flat: np.ndarray) -> np.ndarray:
         """Compute OFDM CSI from CIR using explicit per-subcarrier phase terms."""
         if a_flat.size == 0 or tau_flat.size == 0:
@@ -382,6 +468,7 @@ class SionnaAdapter:
         rx_pose = (self._state or {}).get("rx_pose")
         if tx_pose is None or rx_pose is None:
             solver_seed = self._resolve_solver_seed(frame_idx)
+            self._last_path_geometry = []
             return {
                 "status": "missing_pose",
                 "a_re": [],
@@ -414,6 +501,10 @@ class SionnaAdapter:
             "seed": solver_seed,
         }
         paths = self._compute_paths_with_fallback(solver_kwargs)
+        if self._visualize_rays:
+            self._last_path_geometry = self._extract_path_polylines(paths)
+        else:
+            self._last_path_geometry = []
 
         a, tau = paths.cir(out_type="numpy")
         a_flat = np.asarray(a).reshape(-1)

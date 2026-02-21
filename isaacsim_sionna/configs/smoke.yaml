@@ -1,6 +1,8 @@
 project:
   name: isaacsim_sionna_smoke
   seed: 42
+  hash_algo: sha256
+  solver_seed_strategy: frame_offset
   output_root: isaacsim_sionna/data/raw
 
 runtime:
@@ -14,6 +16,21 @@ env:
 isaac:
   headless: true
   render: false
+  camera:
+    enabled: false
+    name: camera_main
+    prim_path: /World/camera_main
+    position_xyz: [0.0, -12.0, 10.0]
+    target_xyz: [0.0, 0.0, 1.5]
+    resolution: [640, 360]
+    format: png
+    output_subdir: renders
+  geometry:
+    mode: aabb
+    mesh:
+      format: ply
+      output_dir: isaacsim_sionna/data/scenes_sionna/runtime_meshes
+      max_meshes: 64
   prim_paths:
     tx: /World/tx
     rx: /World/rx
@@ -29,5 +46,15 @@ radio:
   bandwidth_hz: 20e6
   num_subcarriers: 64
 
+storage:
+  tensor_store:
+    enabled: false
+    format: hdf5
+    path: csi_tensors.h5
+    dtype: complex64
+    compression: gzip
+    chunk_frames: 64
+
 labels:
   mode: none
+  activity_label: unknown

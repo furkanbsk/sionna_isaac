@@ -16,8 +16,8 @@ env:
   conda_env_name: env_isaacsim
 
 isaac:
-  headless: true
-  render: false
+  headless: true # true for headless mode, false for GUI mode
+  render: false # true for rendering mode, false for non-rendering mode
   camera:
     enabled: false
     name: camera_main

@@ -31,7 +31,7 @@ def pytest_configure(config):
         os.environ['CUDA_VISIBLE_DEVICES'] = ""
     try:
         import sionna
-        v = getattr(sionna.__version__)
+        _ = sionna.__version__
     except:
         import sys
         sys.path.append("../src")

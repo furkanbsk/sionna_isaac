@@ -1,6 +1,8 @@
 project:
   name: isaacsim_sionna_har
   seed: 123
+  hash_algo: sha256
+  solver_seed_strategy: frame_offset
   output_root: isaacsim_sionna/data/raw
 
 runtime:
@@ -11,6 +13,22 @@ runtime:
 isaac:
   headless: true
   render: false
+  actor_motion:
+    enabled: true
+    update_every_tick: true
+    proxy_half_extent_xyz: [0.3, 0.3, 0.9]
+    actors:
+      - prim_path: /World/humanoid_01
+        motion_type: trajectory
+        trajectory:
+          kind: waypoints
+          loop: true
+          speed_mps: 1.0
+          waypoints_xyz:
+            - [2.0, 1.0, 0.0]
+            - [6.0, 1.0, 0.0]
+            - [6.0, 4.0, 0.0]
+            - [2.0, 4.0, 0.0]
   prim_paths:
     tx: /World/tx
     rx: /World/rx
@@ -24,8 +42,18 @@ scenario:
   actor_type: humanoid
   animation_set: walk_sit_wave
 
+storage:
+  tensor_store:
+    enabled: true
+    format: hdf5
+    path: csi_tensors.h5
+    dtype: complex64
+    compression: gzip
+    chunk_frames: 64
+
 labels:
   mode: har
+  activity_label: walking
   classes:
     - idle
     - walk

@@ -10,6 +10,17 @@ communication systems.
 The official documentation can be found
 [here](https://nvlabs.github.io/sionna/).
 
+## Local Experimental Project: Isaac Sim + Sionna CSI Pipeline
+
+This workspace includes a local scaffold for Isaac Sim integration aimed at
+collecting CSI datasets:
+
+- `isaacsim_sionna/README.md`
+- `isaacsim_sionna/docs/ROADMAP.md`
+
+The scaffold is intentionally minimal and designed for iterative development in
+the `env_isaacsim` conda environment.
+
 It is composed of the following packages:
 
 - [Sionna RT](https://nvlabs.github.io/sionna/rt/index.html) -

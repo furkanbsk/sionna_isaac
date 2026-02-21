@@ -19,3 +19,6 @@ tutorials/phy/freq_cov_mat.npy
 tutorials/phy/space_cov_mat.npy
 tutorials/phy/time_cov_mat.npy
 test/log.txt
+
+# Local tool binaries
+pandoc-3.9/bin/pandoc
