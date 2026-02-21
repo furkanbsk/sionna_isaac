@@ -1,11 +1,15 @@
 project:
   name: isaacsim_sionna_csi
   seed: 42
+  hash_algo: sha256
+  solver_seed_strategy: frame_offset
   output_root: isaacsim_sionna/data/raw
 
 runtime:
   isaac_fps: 60
+  radio_update_rate_hz: 10
   radio_update_hz: 10
+  frame_skip_ratio:
   max_frames: 600
 
 env:
@@ -14,6 +18,26 @@ env:
 isaac:
   headless: true
   render: false
+  camera:
+    enabled: false
+    name: camera_main
+    prim_path: /World/camera_main
+    position_xyz: [0.0, -25.0, 18.0]
+    target_xyz: [0.0, 0.0, 1.5]
+    resolution: [1280, 720]
+    format: png
+    output_subdir: renders
+  actor_motion:
+    enabled: false
+    update_every_tick: true
+    proxy_half_extent_xyz: [0.25, 0.25, 0.9]
+    actors: []
+  geometry:
+    mode: aabb
+    mesh:
+      format: ply
+      output_dir: isaacsim_sionna/data/scenes_sionna/runtime_meshes
+      max_meshes: 256
   prim_paths:
     tx: /World/tx
     rx: /World/rx
@@ -29,8 +53,46 @@ radio:
   carrier_hz: 3.5e9
   bandwidth_hz: 20e6
   num_subcarriers: 256
+  csi_method: explicit_cir_to_ofdm
   max_depth: 5
   samples_per_src: 100000
+  propagation:
+    los: true
+    specular_reflection: true
+    diffuse_reflection: true
+    refraction: true
+    diffraction: true
+    edge_diffraction: true
+    diffraction_lit_region: true
+
+storage:
+  tensor_store:
+    enabled: false
+    format: hdf5
+    path: csi_tensors.h5
+    dtype: complex64
+    compression: gzip
+    chunk_frames: 64
+
+qa:
+  path_count:
+    max_los_only_ratio: 0.8
+  csi_variance:
+    adaptive_scale: 1e-4
+    abs_floor: 1e-8
+  frequency_selectivity:
+    metric: p90
+    abs_floor: 1e-6
+  bounds:
+    mode: scene_bbox
+    margin_m: 1.0
+  strict: true
+
+performance:
+  profiling:
+    enabled: true
+    report_percentiles: [50, 95]
 
 labels:
   mode: none
+  activity_label: unknown

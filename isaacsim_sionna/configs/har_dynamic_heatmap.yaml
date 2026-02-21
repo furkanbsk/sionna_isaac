@@ -1,0 +1,121 @@
+project:
+  name: isaacsim_sionna_har_dynamic_heatmap
+  seed: 42
+  hash_algo: sha256
+  solver_seed_strategy: frame_offset
+  output_root: isaacsim_sionna/data/raw/har_dynamic_heatmap
+
+runtime:
+  isaac_fps: 30
+  radio_update_rate_hz: 10
+  radio_update_hz: 10
+  frame_skip_ratio:
+  max_frames: 240
+
+env:
+  conda_env_name: env_isaacsim
+
+isaac:
+  headless: true
+  render: false
+  camera:
+    enabled: false
+    name: camera_main
+    prim_path: /World/camera_main
+    position_xyz: [-10.0, -40.0, 20.0]
+    target_xyz: [-10.0, 6.0, 1.5]
+    resolution: [1280, 720]
+    format: png
+    output_subdir: renders
+  actor_motion:
+    enabled: true
+    update_every_tick: true
+    proxy_half_extent_xyz: [0.6, 0.6, 1.2]
+    actors:
+      - prim_path: /World/humanoid_01
+        motion_type: trajectory
+        trajectory:
+          kind: waypoints
+          loop: true
+          speed_mps: 1.8
+          # Cross the TX-RX LOS corridor around midpoint near [-10.7, 5.9, 1.5]
+          # and sweep nearby reflections for strong temporal RF perturbations.
+          waypoints_xyz:
+            - [-30.0, -11.0, 1.5]
+            - [-10.7, 5.9, 1.5]
+            - [8.5, 21.0, 1.5]
+            - [-10.7, 5.9, 1.5]
+  geometry:
+    mode: mesh
+    mesh:
+      format: ply
+      output_dir: isaacsim_sionna/data/scenes_sionna/runtime_meshes
+      max_meshes: 256
+      include_regex: /Root/
+      exclude_regex:
+  prim_paths:
+    tx: /World/tx
+    rx: /World/rx
+    actors:
+      - /World/humanoid_01
+  anchors:
+    auto_from_bbox: false
+    manual_tx_xyz: [-33.261692, -12.629838, 1.5]
+    manual_rx_xyz: [11.829577, 24.480648, 1.5]
+    height_m: 1.5
+    max_meshes: 256
+
+scenario:
+  id: har_dynamic_heatmap
+  scene_usd: isaacsim_sionna/data/scenes_usd/hospital.usd
+  scene_sionna_cache: isaacsim_sionna/data/scenes_sionna/cache/hospital_runtime.xml
+
+radio:
+  carrier_hz: 5.32e9
+  bandwidth_hz: 40e6
+  num_subcarriers: 256
+  csi_method: explicit_cir_to_ofdm
+  max_depth: 7
+  samples_per_src: 300000
+  propagation:
+    los: true
+    specular_reflection: true
+    diffuse_reflection: true
+    refraction: true
+    diffraction: true
+    edge_diffraction: true
+    diffraction_lit_region: true
+
+storage:
+  tensor_store:
+    enabled: true
+    format: hdf5
+    path: csi_tensors.h5
+    dtype: complex64
+    compression: gzip
+    chunk_frames: 64
+
+qa:
+  path_count:
+    max_los_only_ratio: 0.8
+  csi_variance:
+    metric: p90
+    adaptive_scale: 1.0e-8
+    abs_floor: 1.0e-12
+  frequency_selectivity:
+    metric: p90
+    abs_floor: 5.0e-7
+  bounds:
+    mode: scene_bbox
+    margin_m: 1.0
+  strict: true
+
+labels:
+  mode: har
+  activity_label: walking
+  classes:
+    - idle
+    - walk
+    - sit
+    - wave
+  window_frames: 60

@@ -139,6 +139,48 @@ def _check_csi_variance(rows: list[dict[str, Any]], config: dict[str, Any], tens
     )
 
 
+def _check_frequency_selectivity(config: dict[str, Any], tensor_path: Path | None) -> CheckResult:
+    if tensor_path is None or not tensor_path.exists():
+        return CheckResult(name="frequency_selectivity_floor", status="not_applicable", details={"reason": "no_tensor_store"})
+
+    import h5py  # pylint: disable=import-outside-toplevel
+
+    with h5py.File(str(tensor_path), "r") as h5:
+        if "frames" not in h5 or "csi_c64" not in h5["frames"]:
+            return CheckResult(name="frequency_selectivity_floor", status="failed", details={"reason": "missing_csi_c64"})
+        csi = np.asarray(h5["frames"]["csi_c64"])
+
+    if csi.shape[1] < 2:
+        return CheckResult(name="frequency_selectivity_floor", status="not_applicable", details={"reason": "insufficient_subcarriers"})
+
+    mag = np.abs(csi)
+    per_frame_sc_std = np.std(mag, axis=1)
+    qa_cfg = config.get("qa") or {}
+    fs_cfg = qa_cfg.get("frequency_selectivity") or {}
+    abs_floor = float(fs_cfg.get("abs_floor", 1e-6))
+    metric = str(fs_cfg.get("metric", "p90")).strip().lower()
+    if metric == "median":
+        score = float(np.percentile(per_frame_sc_std, 50))
+        metric_name = "median"
+    else:
+        score = float(np.percentile(per_frame_sc_std, 90))
+        metric_name = "p90"
+    failed = score < abs_floor
+    return CheckResult(
+        name="frequency_selectivity_floor",
+        status="failed" if failed else "passed",
+        details={
+            "num_frames": int(csi.shape[0]),
+            "num_subcarriers": int(csi.shape[1]),
+            "metric": metric_name,
+            "metric_value": score,
+            "abs_floor": abs_floor,
+            "median_sc_std": float(np.percentile(per_frame_sc_std, 50)),
+            "p90_sc_std": float(np.percentile(per_frame_sc_std, 90)),
+        },
+    )
+
+
 def _check_bounds(rows: list[dict[str, Any]], config: dict[str, Any]) -> CheckResult:
     qa_cfg = config.get("qa") or {}
     bounds_cfg = qa_cfg.get("bounds") or {}
@@ -262,6 +304,7 @@ def validate_run(
     checks = [
         _check_path_count(rows, cfg),
         _check_csi_variance(rows, cfg, tensor_path),
+        _check_frequency_selectivity(cfg, tensor_path),
         _check_bounds(rows, cfg),
         _check_sync(rows, manifest, run_root),
     ]
