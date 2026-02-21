@@ -79,6 +79,7 @@ class Pipeline:
         t_run_start = time.perf_counter()
         isaac_step_times: list[float] = []
         path_solver_times: list[float] = []
+        rgb_render_times: list[float] = []
         hdf5_write_times: list[float] = []
         num_radio_updates = 0
 
@@ -112,8 +113,16 @@ class Pipeline:
                     snapshot = self.sionna.compute_snapshot(frame_idx=frame_idx)
                     path_solver_times.append(time.perf_counter() - t1)
                     snapshot["timestamp_sim"] = state.get("timestamp_sim")
+                    render_ref = None
+                    if hasattr(self.isaac, "capture_rgb"):
+                        tcam = time.perf_counter()
+                        render_ref = self.isaac.capture_rgb(frame_idx=frame_idx)
+                        rgb_render_times.append(time.perf_counter() - tcam)
                     t2 = time.perf_counter()
-                    self.writer.write(frame_idx=frame_idx, state=state, snapshot=snapshot)
+                    try:
+                        self.writer.write(frame_idx=frame_idx, state=state, snapshot=snapshot, render_ref=render_ref)
+                    except TypeError:
+                        self.writer.write(frame_idx=frame_idx, state=state, snapshot=snapshot)
                     hdf5_write_times.append(time.perf_counter() - t2)
                     num_radio_updates += 1
 
@@ -130,6 +139,7 @@ class Pipeline:
             perf = {
                 "isaac_step": self._stats(isaac_step_times),
                 "path_solver": self._stats(path_solver_times),
+                "rgb_render": self._stats(rgb_render_times),
                 "hdf5_write": self._stats(hdf5_write_times),
                 "geometry_prep": {
                     "mean_ms": geometry_prep_ms,

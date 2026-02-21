@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from typing import Any
 import math
 
@@ -44,6 +45,8 @@ class CameraAdapter:
         self.camera_name = str(camera_cfg.get("name", "camera_main"))
         self.prim_path = str(camera_cfg.get("prim_path", f"/World/{self.camera_name}"))
         self.warmup_steps = max(0, int(camera_cfg.get("warmup_steps", 1)))
+        self.capture_max_attempts = max(1, int(camera_cfg.get("capture_max_attempts", 2)))
+        self.capture_timeout_s = float(camera_cfg.get("capture_timeout_s", 1.0))
         self.output_root = Path(project_cfg.get("output_root", "isaacsim_sionna/data/raw"))
 
         self._rep = None
@@ -170,14 +173,32 @@ class CameraAdapter:
         if self._rep is None or self._rgb_annotator is None or self._renders_dir is None:
             return None
 
-        # Flush one render frame for headless capture without advancing physics.
-        try:
-            self._rep.orchestrator.step()
-            rgb = self._rgb_annotator.get_data()
-        except Exception as exc:
-            self._warn_once("capture", f"[CameraAdapter] WARN: capture failed: {exc}")
-            return None
+        # Flush render frames with bounded attempts/timeout to avoid headless stalls.
+        start_t = time.perf_counter()
+        rgb = None
+        for attempt_idx in range(self.capture_max_attempts):
+            if (time.perf_counter() - start_t) > self.capture_timeout_s:
+                self._warn_once(
+                    "capture_timeout",
+                    (
+                        "[CameraAdapter] WARN: capture timed out "
+                        f"after {self.capture_timeout_s:.3f}s and {attempt_idx} attempts"
+                    ),
+                )
+                return None
+            try:
+                self._rep.orchestrator.step()
+                rgb = self._rgb_annotator.get_data()
+            except Exception as exc:
+                self._warn_once("capture", f"[CameraAdapter] WARN: capture failed: {exc}")
+                return None
+            if rgb is not None:
+                break
         if rgb is None:
+            self._warn_once(
+                "capture_empty",
+                f"[CameraAdapter] WARN: capture returned no RGB data after {self.capture_max_attempts} attempts",
+            )
             return None
 
         ext = "jpg" if self.image_format in {"jpg", "jpeg"} else "png"
