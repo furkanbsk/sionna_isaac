@@ -20,13 +20,17 @@ isaac:
   render: false
   camera:
     enabled: false
+    backend: replicator
     name: camera_main
     prim_path: /World/camera_main
     position_xyz: [0.0, -25.0, 18.0]
     target_xyz: [0.0, 0.0, 1.5]
+    orientation_rpy_deg:
+    orientation_quat_wxyz:
     resolution: [1280, 720]
     format: png
     output_subdir: renders
+    warmup_steps: 1
   actor_motion:
     enabled: false
     update_every_tick: true
