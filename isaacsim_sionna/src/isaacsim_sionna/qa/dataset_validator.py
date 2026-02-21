@@ -271,6 +271,66 @@ def _check_sync(rows: list[dict[str, Any]], manifest: dict[str, Any], run_root: 
     )
 
 
+def _check_visual_sync(rows: list[dict[str, Any]], manifest: dict[str, Any], config: dict[str, Any], run_root: Path) -> CheckResult:
+    isaac_cfg = config.get("isaac") or {}
+    camera_cfg = isaac_cfg.get("camera") or {}
+    camera_enabled = bool(camera_cfg.get("enabled", False))
+    if not camera_enabled:
+        return CheckResult(name="visual_sync_check", status="not_applicable", details={"reason": "camera_disabled"})
+
+    outputs = manifest.get("outputs") or {}
+    renders_rel = str(outputs.get("renders_dir") or camera_cfg.get("output_subdir") or "renders")
+    renders_dir = run_root / renders_rel
+    valid_exts = {".png", ".jpg", ".jpeg"}
+
+    referenced_paths: list[str] = []
+    missing_files: list[str] = []
+    zero_byte_files: list[str] = []
+    for row in rows:
+        image_path = row.get("image_path")
+        if image_path is None:
+            continue
+        image_path_str = str(image_path).strip()
+        if not image_path_str:
+            continue
+        referenced_paths.append(image_path_str)
+        p = Path(image_path_str)
+        abs_p = p if p.is_absolute() else (run_root / p)
+        if not abs_p.exists():
+            missing_files.append(image_path_str)
+            continue
+        try:
+            if int(abs_p.stat().st_size) <= 0:
+                zero_byte_files.append(image_path_str)
+        except OSError:
+            missing_files.append(image_path_str)
+
+    disk_images: list[str] = []
+    if renders_dir.exists() and renders_dir.is_dir():
+        for p in sorted(renders_dir.iterdir()):
+            if p.is_file() and p.suffix.lower() in valid_exts:
+                disk_images.append(str(p.relative_to(run_root)))
+
+    ref_count = len(referenced_paths)
+    disk_count = len(disk_images)
+    count_mismatch = ref_count != disk_count
+    failed = count_mismatch or bool(missing_files) or bool(zero_byte_files)
+
+    return CheckResult(
+        name="visual_sync_check",
+        status="failed" if failed else "passed",
+        details={
+            "camera_enabled": camera_enabled,
+            "renders_dir": renders_rel,
+            "jsonl_image_ref_count": ref_count,
+            "disk_image_count": disk_count,
+            "count_mismatch": count_mismatch,
+            "missing_files": missing_files,
+            "zero_byte_files": zero_byte_files,
+        },
+    )
+
+
 def _make_summary(results: list[CheckResult]) -> dict[str, Any]:
     failures = [r for r in results if r.status == "failed"]
     return {
@@ -307,6 +367,7 @@ def validate_run(
         _check_frequency_selectivity(cfg, tensor_path),
         _check_bounds(rows, cfg),
         _check_sync(rows, manifest, run_root),
+        _check_visual_sync(rows, manifest, cfg, run_root),
     ]
 
     summary = _make_summary(checks)
@@ -316,7 +377,7 @@ def validate_run(
         "status": status,
         "strict_mode": bool(strict),
         "checked_at_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-        "validator_version": "1.0",
+        "validator_version": "1.1",
         "summary": summary,
         "results": [
             {

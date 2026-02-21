@@ -13,7 +13,14 @@ from isaacsim_sionna.qa.dataset_validator import validate_run
 pytestmark = pytest.mark.skipif(importlib.util.find_spec("h5py") is None, reason="h5py not installed")
 
 
-def _write_artifacts(tmp_path: Path, rows: list[dict], csi: np.ndarray, frame_idx: list[int], config: dict) -> Path:
+def _write_artifacts(
+    tmp_path: Path,
+    rows: list[dict],
+    csi: np.ndarray,
+    frame_idx: list[int],
+    config: dict,
+    renders_dir: str | None = None,
+) -> Path:
     import h5py
 
     run_root = tmp_path / "run"
@@ -45,6 +52,8 @@ def _write_artifacts(tmp_path: Path, rows: list[dict], csi: np.ndarray, frame_id
         },
         "config": config,
     }
+    if renders_dir is not None:
+        manifest["outputs"]["renders_dir"] = str(renders_dir)
     (run_root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return run_root
 
@@ -184,3 +193,85 @@ def test_validate_run_fails_frequency_selectivity(monkeypatch: pytest.MonkeyPatc
     assert report["status"] == "failed"
     failed_names = {item["name"] for item in report["results"] if item["status"] == "failed"}
     assert "frequency_selectivity_floor" in failed_names
+
+
+def test_visual_sync_not_applicable_when_camera_disabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config = {
+        "scenario": {"scene_usd": "dummy.usd", "id": "hospital"},
+        "qa": {"strict": True},
+        "isaac": {"camera": {"enabled": False}},
+    }
+    rows = _base_rows(2)
+    csi = np.asarray([[1.0 + 0.0j, 2.0 + 0.0j], [1.1 + 0.1j, 2.1 + 0.1j]], dtype=np.complex64)
+    run_root = _write_artifacts(tmp_path, rows, csi, [0, 1], config)
+
+    monkeypatch.setattr(
+        "isaacsim_sionna.qa.dataset_validator.extract_mesh_aabbs_from_usd_file",
+        lambda scene_usd, max_meshes=None: [
+            type("M", (), {"center_xyz": [2.5, 0.0, 1.5], "half_extent_xyz": [10.0, 10.0, 10.0], "prim_path": "/A"})
+        ],
+    )
+
+    report = validate_run(run_root=run_root, config=config, strict=True, write_manifest=False)
+    visual = next(item for item in report["results"] if item["name"] == "visual_sync_check")
+    assert visual["status"] == "not_applicable"
+
+
+def test_visual_sync_passes_with_matching_jsonl_and_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config = {
+        "scenario": {"scene_usd": "dummy.usd", "id": "hospital"},
+        "qa": {"strict": True},
+        "isaac": {"camera": {"enabled": True, "output_subdir": "renders"}},
+    }
+    rows = _base_rows(2)
+    rows[0]["image_path"] = "renders/frame_0000.png"
+    rows[1]["image_path"] = "renders/frame_0001.png"
+    csi = np.asarray([[1.0 + 0.0j, 2.0 + 0.0j], [1.1 + 0.1j, 2.1 + 0.1j]], dtype=np.complex64)
+    run_root = _write_artifacts(tmp_path, rows, csi, [0, 1], config, renders_dir="renders")
+    renders = run_root / "renders"
+    renders.mkdir(parents=True, exist_ok=True)
+    (renders / "frame_0000.png").write_bytes(b"rgb0")
+    (renders / "frame_0001.png").write_bytes(b"rgb1")
+
+    monkeypatch.setattr(
+        "isaacsim_sionna.qa.dataset_validator.extract_mesh_aabbs_from_usd_file",
+        lambda scene_usd, max_meshes=None: [
+            type("M", (), {"center_xyz": [2.5, 0.0, 1.5], "half_extent_xyz": [10.0, 10.0, 10.0], "prim_path": "/A"})
+        ],
+    )
+
+    report = validate_run(run_root=run_root, config=config, strict=True, write_manifest=False)
+    visual = next(item for item in report["results"] if item["name"] == "visual_sync_check")
+    assert visual["status"] == "passed"
+
+
+def test_visual_sync_fails_on_missing_or_empty_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config = {
+        "scenario": {"scene_usd": "dummy.usd", "id": "hospital"},
+        "qa": {"strict": True},
+        "isaac": {"camera": {"enabled": True, "output_subdir": "renders"}},
+    }
+    rows = _base_rows(2)
+    rows[0]["image_path"] = "renders/frame_0000.png"
+    rows[1]["image_path"] = "renders/frame_0001.png"
+    csi = np.asarray([[1.0 + 0.0j, 2.0 + 0.0j], [1.1 + 0.1j, 2.1 + 0.1j]], dtype=np.complex64)
+    run_root = _write_artifacts(tmp_path, rows, csi, [0, 1], config, renders_dir="renders")
+    renders = run_root / "renders"
+    renders.mkdir(parents=True, exist_ok=True)
+    (renders / "frame_0000.png").write_bytes(b"")
+    # frame_0001.png intentionally missing
+
+    monkeypatch.setattr(
+        "isaacsim_sionna.qa.dataset_validator.extract_mesh_aabbs_from_usd_file",
+        lambda scene_usd, max_meshes=None: [
+            type("M", (), {"center_xyz": [2.5, 0.0, 1.5], "half_extent_xyz": [10.0, 10.0, 10.0], "prim_path": "/A"})
+        ],
+    )
+
+    report = validate_run(run_root=run_root, config=config, strict=True, write_manifest=False)
+    assert report["status"] == "failed"
+    visual = next(item for item in report["results"] if item["name"] == "visual_sync_check")
+    assert visual["status"] == "failed"
+    assert visual["details"]["count_mismatch"] is True
+    assert "renders/frame_0001.png" in visual["details"]["missing_files"]
+    assert "renders/frame_0000.png" in visual["details"]["zero_byte_files"]
