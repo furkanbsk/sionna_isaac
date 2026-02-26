@@ -1,0 +1,162 @@
+project:
+  name: ira_smoke_test_navfix2
+  seed: 42
+  hash_algo: sha256
+  solver_seed_strategy: frame_offset
+  output_root: isaacsim_sionna/data/raw/ira_smoke_test_navfix2
+
+runtime:
+  isaac_fps: 30
+  radio_update_rate_hz: 10
+  radio_update_hz: 10
+  frame_skip_ratio:
+  max_frames: 30
+
+env:
+  conda_env_name: env_isaacsim
+
+isaac:
+  headless: true
+  render: false
+  visualize_rays: false
+  ray_viz:
+    los_color_rgba: [1.0, 0.1, 0.1, 1.0]
+    nlos_color_rgba: [0.2, 0.7, 1.0, 1.0]
+    specular_color_rgba: [0.45, 0.65, 1.0, 1.0]
+    diffuse_color_rgba: [0.45, 1.0, 0.55, 1.0]
+    refraction_color_rgba: [1.0, 0.55, 0.35, 1.0]
+    diffraction_color_rgba: [0.85, 0.3, 1.0, 1.0]
+    color_by_interaction: true
+    log_path_stats: true
+    line_width: 2.0
+    max_paths_to_draw: 128
+    draw_only_when_rendering: true
+  camera:
+    enabled: true
+    backend: replicator
+    name: camera_main
+    prim_path: /World/camera_main
+    position_xyz: [-10.0, -40.0, 20.0]
+    target_xyz: [-10.0, 6.0, 1.5]
+    look_at_mode: target
+    orientation_rpy_deg:
+    orientation_quat_wxyz:
+    fov_deg: 70.0
+    clip_near_m: 0.05
+    clip_far_m: 500.0
+    normalize_intensity: true
+    normalize_p_low: 1.0
+    normalize_p_high: 99.0
+    resolution: [1280, 720]
+    format: png
+    output_subdir: renders
+    warmup_steps: 1
+  actor_motion:
+    enabled: true
+    backend: ira
+    update_every_tick: true
+    ira:
+      enabled: true
+      config_path:
+      auto_generate_config: true
+      auto_generate_commands: true
+      runtime_dir: isaacsim_sionna/data/runtime/ira
+      simulation_length_frames: 30
+      # NOTE: IRA subsystem requires absolute path for scene_asset_path
+      scene_asset_path: /home/nvidia/Desktop/Main_Workspace/sionna/isaacsim_sionna/data/scenes_usd/hospital.usd
+      navmesh:
+        auto_bootstrap: true
+        bootstrap_parent_prim_path: /World
+        bootstrap_retries: 1
+        bootstrap_update_steps: 8
+        fail_if_missing: true
+      ui:
+        enable_in_gui: false
+      character:
+        num: 1
+        asset_path:
+        filters:
+        tracked_prim_paths: []
+    proxy_half_extent_xyz: [0.6, 0.6, 1.2]
+    render_fallback:
+      enabled: true
+      use_if_missing_or_xform_only: true
+      prim_type: Capsule
+      radius_m: 1.2
+      height_m: 2.6
+      color_rgb: [0.95, 0.2, 0.1]
+      opacity: 1.0
+    actors: []
+  geometry:
+    mode: mesh
+    mesh:
+      format: ply
+      output_dir: isaacsim_sionna/data/scenes_sionna/runtime_meshes
+      max_meshes: 256
+      include_regex: /Root/
+      exclude_regex:
+  prim_paths:
+    tx: /World/tx
+    rx: /World/rx
+    actors: []
+  anchors:
+    auto_from_bbox: false
+    manual_tx_xyz: [-33.261692, -12.629838, 1.5]
+    manual_rx_xyz: [11.829577, 24.480648, 1.5]
+    height_m: 1.5
+    max_meshes: 256
+
+scenario:
+  id: ira_smoke_test_navfix2
+  scene_usd: isaacsim_sionna/data/scenes_usd/hospital.usd
+  scene_sionna_cache: isaacsim_sionna/data/scenes_sionna/cache/hospital_runtime.xml
+
+radio:
+  carrier_hz: 5.32e9
+  bandwidth_hz: 40e6
+  num_subcarriers: 256
+  csi_method: explicit_cir_to_ofdm
+  max_depth: 7
+  samples_per_src: 200000
+  propagation:
+    los: true
+    specular_reflection: true
+    diffuse_reflection: true
+    refraction: true
+    diffraction: true
+    edge_diffraction: true
+    diffraction_lit_region: true
+
+storage:
+  tensor_store:
+    enabled: true
+    format: hdf5
+    path: csi_tensors.h5
+    dtype: complex64
+    compression: gzip
+    chunk_frames: 64
+
+qa:
+  path_count:
+    max_los_only_ratio: 0.95
+  csi_variance:
+    metric: p90
+    adaptive_scale: 1.0e-8
+    abs_floor: 1.0e-12
+  frequency_selectivity:
+    metric: p90
+    abs_floor: 1.0e-8
+  bounds:
+    mode: scene_bbox
+    margin_m: 1.0
+  strict: false
+
+labels:
+  mode: har
+  activity_label: walking
+  classes:
+    - idle
+    - walk
+    - sit
+    - wave
+  window_frames: 30

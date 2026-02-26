@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import random
 import sys
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize(value: Any) -> Any:
@@ -58,8 +61,10 @@ def seed_everything(seed: int) -> list[str]:
         try:
             tf.random.set_seed(seed)
             applied.append("tensorflow")
-        except Exception:
+        except ImportError:
             pass
+        except Exception as exc:
+            logger.warning("Failed to seed tensorflow: %s", exc)
 
     torch = sys.modules.get("torch")
     if torch is not None:
@@ -68,8 +73,10 @@ def seed_everything(seed: int) -> list[str]:
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(seed)
             applied.append("torch")
-        except Exception:
+        except ImportError:
             pass
+        except Exception as exc:
+            logger.warning("Failed to seed torch: %s", exc)
 
     return applied
 
@@ -85,8 +92,10 @@ def seed_isaac_runtime(seed: int) -> list[str]:
         if callable(set_seed):
             set_seed(seed)
             applied.append("isaacsim_replicator")
-    except Exception:
+    except ImportError:
         pass
+    except Exception as exc:
+        logger.warning("Failed to seed Isaac Replicator: %s", exc)
 
     try:
         import carb.settings  # pylint: disable=import-error
@@ -94,7 +103,9 @@ def seed_isaac_runtime(seed: int) -> list[str]:
         settings = carb.settings.get_settings()
         settings.set("/omni/replicator/seed", int(seed))
         applied.append("carb_settings")
-    except Exception:
+    except ImportError:
         pass
+    except Exception as exc:
+        logger.warning("Failed to seed carb settings: %s", exc)
 
     return applied

@@ -1,0 +1,24 @@
+isaacsim.replicator.agent:
+  version: 0.5.0
+  global:
+    seed: 42
+    simulation_length: 240
+  scene:
+    asset_path: isaacsim_sionna/data/scenes_usd/hospital.usd
+  sensor:
+    camera_num: 0
+  character:
+    asset_path: ""
+    command_file: isaacsim_sionna/data/runtime/ira/command.txt
+    filters: ""
+    num: 1
+  robot:
+    command_file: isaacsim_sionna/data/runtime/ira/robot_command.txt
+    nova_carter_num: 0
+    transporter_num: 0
+    write_data: false
+  replicator:
+    writer: IRABasicWriter
+    parameters:
+      rgb: false
+      camera_params: false

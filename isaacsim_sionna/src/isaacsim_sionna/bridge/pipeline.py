@@ -10,12 +10,16 @@ Flow:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import inspect
+import logging
 import statistics
 import sys
 import time
 import traceback
 
 from isaacsim_sionna.bridge.isaac_adapter import IsaacAdapter
+
+logger = logging.getLogger(__name__)
 from isaacsim_sionna.exporters.csi_writer import CsiWriter
 from isaacsim_sionna.utils.reproducibility import canonicalize_config, compute_config_hash, seed_everything
 from isaacsim_sionna.utils.run_manifest import collect_git_info
@@ -96,9 +100,10 @@ class Pipeline:
             self.sionna.initialize(geometry_proxy=geometry_proxy)
             self.writer.open(run_context=run_context)
 
-            print(
-                f"[Pipeline] start max_frames={max_frames} isaac_fps={isaac_fps} "
-                f"radio_update_rate_hz={radio_hz} frame_skip_ratio={frame_skip_ratio} radio_period={radio_period}"
+            logger.info(
+                "start max_frames=%d isaac_fps=%.1f radio_update_rate_hz=%.1f "
+                "frame_skip_ratio=%s radio_period=%d",
+                max_frames, isaac_fps, radio_hz, frame_skip_ratio, radio_period,
             )
 
             for frame_idx in range(max_frames):
@@ -125,9 +130,10 @@ class Pipeline:
                         render_ref = self.isaac.capture_rgb(frame_idx=frame_idx)
                         rgb_render_times.append(time.perf_counter() - tcam)
                     t2 = time.perf_counter()
-                    try:
+                    sig = inspect.signature(self.writer.write)
+                    if "render_ref" in sig.parameters:
                         self.writer.write(frame_idx=frame_idx, state=state, snapshot=snapshot, render_ref=render_ref)
-                    except TypeError:
+                    else:
                         self.writer.write(frame_idx=frame_idx, state=state, snapshot=snapshot)
                     hdf5_write_times.append(time.perf_counter() - t2)
                     num_radio_updates += 1
@@ -158,10 +164,10 @@ class Pipeline:
                 "effective_radio_hz": effective_radio_hz,
             }
             self.writer.set_runtime_metrics(perf)
-            print(f"[Pipeline] perf={perf}")
-            print("[Pipeline] done")
+            logger.info("perf=%s", perf)
+            logger.info("done")
         except Exception as exc:  # pragma: no cover - runtime failure diagnostics
-            print(f"[Pipeline] ERROR: {exc!r}")
+            logger.error("ERROR: %r", exc)
             traceback.print_exc()
             sys.stdout.flush()
             sys.stderr.flush()

@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 import math
+from xml.sax.saxutils import quoteattr
 
 from isaacsim_sionna.bridge.usd_mesh_export import MeshFileRef
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -98,15 +102,23 @@ def compute_global_bbox(aabbs: list[MeshAabb]) -> dict[str, list[float]]:
     return {"min_xyz": min_xyz, "max_xyz": max_xyz}
 
 
-def _xml_material_block(lines: list[str]) -> None:
+def _xml_material_block(
+    lines: list[str],
+    material_type: str = "concrete",
+    thickness: float = 0.2,
+) -> None:
     lines.append('  <bsdf type="itu-radio-material" id="mat-default">')
-    lines.append('    <string name="type" value="concrete"/>')
-    lines.append('    <float name="thickness" value="0.2"/>')
+    lines.append(f'    <string name="type" value="{material_type}"/>')
+    lines.append(f'    <float name="thickness" value="{thickness}"/>')
     lines.append('  </bsdf>')
 
 
 def build_sionna_xml_from_aabbs(
-    aabbs: list[MeshAabb], output_xml: Path, dynamic_actor_count: int = 0
+    aabbs: list[MeshAabb],
+    output_xml: Path,
+    dynamic_actor_count: int = 0,
+    material_type: str = "concrete",
+    material_thickness: float = 0.2,
 ) -> Path:
     """Write a Mitsuba/Sionna XML scene with one cube per mesh AABB."""
     if not aabbs:
@@ -117,7 +129,7 @@ def build_sionna_xml_from_aabbs(
 
     lines: list[str] = []
     lines.append('<scene version="2.1.0">')
-    _xml_material_block(lines)
+    _xml_material_block(lines, material_type=material_type, thickness=material_thickness)
 
     for i, _ in enumerate(aabbs):
         lines.append(f'  <shape type="cube" id="mesh_box_{i}">')
@@ -135,7 +147,11 @@ def build_sionna_xml_from_aabbs(
 
 
 def build_sionna_xml_from_mesh_files(
-    mesh_refs: list[MeshFileRef], output_xml: Path, dynamic_actor_count: int = 0
+    mesh_refs: list[MeshFileRef],
+    output_xml: Path,
+    dynamic_actor_count: int = 0,
+    material_type: str = "concrete",
+    material_thickness: float = 0.2,
 ) -> Path:
     """Write Mitsuba/Sionna XML scene referencing exported mesh files."""
     if not mesh_refs:
@@ -146,11 +162,11 @@ def build_sionna_xml_from_mesh_files(
 
     lines: list[str] = []
     lines.append('<scene version="2.1.0">')
-    _xml_material_block(lines)
+    _xml_material_block(lines, material_type=material_type, thickness=material_thickness)
 
     for i, ref in enumerate(mesh_refs):
         lines.append(f'  <shape type="ply" id="mesh_{i}">')
-        lines.append(f'    <string name="filename" value="{ref.file_path}"/>')
+        lines.append(f'    <string name="filename" value={quoteattr(ref.file_path)}/>')
         lines.append('    <boolean name="face_normals" value="true"/>')
         lines.append('    <ref name="bsdf" id="mat-default"/>')
         lines.append('  </shape>')

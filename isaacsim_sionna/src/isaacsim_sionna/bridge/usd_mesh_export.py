@@ -28,6 +28,11 @@ class MeshFileRef:
 
 def triangulate_faces(face_counts: np.ndarray, face_indices: np.ndarray) -> np.ndarray:
     """Triangulate polygonal faces using fan triangulation."""
+    expected_len = int(face_counts.sum())
+    if len(face_indices) < expected_len:
+        raise ValueError(
+            f"face_indices length ({len(face_indices)}) < sum(face_counts) ({expected_len})"
+        )
     tris: list[list[int]] = []
     cursor = 0
     for n in face_counts.tolist():
@@ -44,10 +49,23 @@ def triangulate_faces(face_counts: np.ndarray, face_indices: np.ndarray) -> np.n
     return np.asarray(tris, dtype=np.int32)
 
 
+_COMPILED_REGEX_CACHE: dict[str, re.Pattern] = {}
+
+
+def _compile_regex(pattern: str) -> re.Pattern:
+    """Compile and cache regex patterns."""
+    if pattern not in _COMPILED_REGEX_CACHE:
+        try:
+            _COMPILED_REGEX_CACHE[pattern] = re.compile(pattern)
+        except re.error as exc:
+            raise ValueError(f"Invalid mesh filter regex '{pattern}': {exc}") from exc
+    return _COMPILED_REGEX_CACHE[pattern]
+
+
 def _matches_filters(prim_path: str, include_regex: str | None, exclude_regex: str | None) -> bool:
-    if include_regex and re.search(include_regex, prim_path) is None:
+    if include_regex and _compile_regex(include_regex).search(prim_path) is None:
         return False
-    if exclude_regex and re.search(exclude_regex, prim_path) is not None:
+    if exclude_regex and _compile_regex(exclude_regex).search(prim_path) is not None:
         return False
     return True
 

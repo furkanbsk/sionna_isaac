@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class Hdf5TensorStore:
@@ -105,6 +108,7 @@ class Hdf5TensorStore:
         csi_re = snapshot.get("csi_re") or []
         csi_im = snapshot.get("csi_im") or []
         if len(csi_re) == 0 or len(csi_im) == 0:
+            logger.warning("Skipping HDF5 frame %d: empty CSI data", frame_idx)
             return None
 
         if len(csi_re) != len(csi_im):
@@ -150,9 +154,17 @@ class Hdf5TensorStore:
         if not self.path.exists():
             return {"tensor_store_sha256": None, "tensor_store_rows": int(self._num_rows)}
 
-        sha = hashlib.sha256(self.path.read_bytes()).hexdigest()
+        try:
+            sha = hashlib.sha256()
+            with open(self.path, "rb") as fh:
+                for chunk in iter(lambda: fh.read(8192), b""):
+                    sha.update(chunk)
+            sha_hex = sha.hexdigest()
+        except Exception as exc:
+            logger.warning("Failed to compute SHA256 for %s: %s", self.path, exc)
+            sha_hex = None
         return {
-            "tensor_store_sha256": sha,
+            "tensor_store_sha256": sha_hex,
             "tensor_store_rows": int(self._num_rows),
             "tensor_store_file": self.rel_path,
         }

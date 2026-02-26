@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 import math
 import time
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from isaacsim_sionna.bridge.usd_mesh_export import extract_mesh_primitives, export_meshes_to_ply
 from isaacsim_sionna.bridge.usd_to_sionna import MeshAabb, build_sionna_xml_from_aabbs, build_sionna_xml_from_mesh_files
@@ -61,6 +64,7 @@ class SionnaAdapter:
         self._visualize_rays = bool(self.isaac_cfg.get("visualize_rays", False))
         ray_viz_cfg = self.isaac_cfg.get("ray_viz", {}) if isinstance(self.isaac_cfg, dict) else {}
         self._max_paths_to_draw = int(ray_viz_cfg.get("max_paths_to_draw", 128))
+        self._log_path_stats = bool(ray_viz_cfg.get("log_path_stats", True))
         self._last_path_geometry: list[dict] = []
         self._dynamic_actor_paths: list[str] = []
         self._dynamic_actor_proxy_map: dict[str, str] = {}
@@ -96,13 +100,14 @@ class SionnaAdapter:
 
         self._scene.frequency = float(self.carrier_hz)
 
+        antenna_cfg = self.radio_cfg.get("antenna", {}) if isinstance(self.radio_cfg, dict) else {}
         array = self._PlanarArray(
-            num_rows=1,
-            num_cols=1,
-            vertical_spacing=0.5,
-            horizontal_spacing=0.5,
-            pattern="iso",
-            polarization="V",
+            num_rows=int(antenna_cfg.get("num_rows", 1)),
+            num_cols=int(antenna_cfg.get("num_cols", 1)),
+            vertical_spacing=float(antenna_cfg.get("vertical_spacing", 0.5)),
+            horizontal_spacing=float(antenna_cfg.get("horizontal_spacing", 0.5)),
+            pattern=str(antenna_cfg.get("pattern", "iso")),
+            polarization=str(antenna_cfg.get("polarization", "V")),
         )
         self._scene.tx_array = array
         self._scene.rx_array = array
@@ -271,6 +276,9 @@ class SionnaAdapter:
 
             for i, mesh in enumerate(mesh_aabbs):
                 obj = self._scene.get(f"mesh_box_{i}")
+                if obj is None:
+                    logger.warning("mesh_box_%d not found in Sionna scene; skipping", i)
+                    continue
                 obj.position = mesh.center_xyz
                 obj.scaling = mesh.half_extent_xyz
 
@@ -284,13 +292,11 @@ class SionnaAdapter:
         self._configure_actor_proxies()
         self._init_metrics["geometry_prep_ms"] = (time.perf_counter() - t_init) * 1000.0
 
-        print(
-            "[SionnaAdapter] initialized "
-            f"mode={self._geometry_mode} "
-            f"carrier_hz={self.carrier_hz:.3e} "
-            f"bandwidth_hz={self.bandwidth_hz:.3e} "
-            f"num_subcarriers={self.num_subcarriers} "
-            f"mesh_count={self._mesh_count} mesh_files={self._mesh_file_count}"
+        logger.info(
+            "initialized mode=%s carrier_hz=%.3e bandwidth_hz=%.3e "
+            "num_subcarriers=%d mesh_count=%d mesh_files=%d",
+            self._geometry_mode, self.carrier_hz, self.bandwidth_hz,
+            self.num_subcarriers, self._mesh_count, self._mesh_file_count,
         )
 
     def get_init_metrics(self) -> dict[str, float]:
@@ -308,9 +314,17 @@ class SionnaAdapter:
         rx_pos = rx_pose.get("pos_xyz")
 
         if tx_pos is not None:
-            self._scene.get("tx").position = tx_pos
+            tx_obj = self._scene.get("tx")
+            if tx_obj is not None:
+                tx_obj.position = tx_pos
+            else:
+                logger.warning("TX object not found in Sionna scene")
         if rx_pos is not None:
-            self._scene.get("rx").position = rx_pos
+            rx_obj = self._scene.get("rx")
+            if rx_obj is not None:
+                rx_obj.position = rx_pos
+            else:
+                logger.warning("RX object not found in Sionna scene")
 
         for actor in (state.get("actor_poses") or []):
             prim_path = actor.get("prim_path")
@@ -340,12 +354,14 @@ class SionnaAdapter:
         if key in self._warned_keys:
             return
         self._warned_keys.add(key)
-        print(msg)
+        logger.warning(msg)
 
     def _compute_paths_with_fallback(self, solver_kwargs: dict) -> object:
         """Call PathSolver while dropping unsupported kwargs for API compatibility."""
         kwargs = dict(solver_kwargs)
-        while True:
+        _max_retries = 10
+        _seen_keys: set[str] = set()
+        for _ in range(_max_retries):
             try:
                 return self._path_solver(self._scene, **kwargs)
             except TypeError as exc:
@@ -354,13 +370,18 @@ class SionnaAdapter:
                 if marker not in msg:
                     raise
                 bad_key = msg.split(marker, 1)[1].split("'", 1)[0]
-                if bad_key not in kwargs:
+                if bad_key not in kwargs or bad_key in _seen_keys:
                     raise
+                _seen_keys.add(bad_key)
                 kwargs.pop(bad_key, None)
                 self._warn_once(
                     f"unsupported::{bad_key}",
                     f"[SionnaAdapter] WARN: PathSolver does not support '{bad_key}'. Falling back without it.",
                 )
+        raise RuntimeError(
+            f"PathSolver fallback exhausted after {_max_retries} retries; "
+            f"dropped keys: {_seen_keys}"
+        )
 
     def _extract_path_polylines(self, paths: object) -> list[dict]:
         """Extract receiver-reaching path polylines for debug visualization."""
@@ -427,6 +448,7 @@ class SionnaAdapter:
                     src = [float(v) for v in src_positions[tx]]
                     tgt = [float(v) for v in tgt_positions[rx]]
                     points = [src]
+                    interaction_types: list[int] = []
                     is_los = True
 
                     for i in range(max_depth):
@@ -436,8 +458,16 @@ class SionnaAdapter:
                         is_los = False
                         v = vertices[i, rx, tx, p]
                         points.append([float(v[0]), float(v[1]), float(v[2])])
+                        interaction_types.append(t)
                     points.append(tgt)
-                    out.append({"points_xyz": points, "is_los": bool(is_los)})
+                    out.append(
+                        {
+                            "points_xyz": points,
+                            "is_los": bool(is_los),
+                            "interaction_types": interaction_types,
+                            "num_segments": max(0, len(points) - 1),
+                        }
+                    )
         return out
 
     def get_last_path_geometry(self) -> list[dict]:
@@ -448,6 +478,14 @@ class SionnaAdapter:
         """Compute OFDM CSI from CIR using explicit per-subcarrier phase terms."""
         if a_flat.size == 0 or tau_flat.size == 0:
             return np.zeros((self.num_subcarriers,), dtype=np.complex128)
+        # Validate delays: clip negative values, warn on extreme delays
+        neg_mask = tau_flat < 0
+        if np.any(neg_mask):
+            self._warn_once("tau_negative", "[SionnaAdapter] WARN: negative delay values clipped to 0")
+            tau_flat = np.clip(tau_flat, 0, None)
+        extreme_mask = tau_flat > 1e-3  # > 1ms
+        if np.any(extreme_mask):
+            self._warn_once("tau_extreme", "[SionnaAdapter] WARN: delay values > 1ms detected; possible numerical overflow")
         if a_flat.size != tau_flat.size:
             n = min(int(a_flat.size), int(tau_flat.size))
             a_flat = a_flat[:n]
@@ -503,6 +541,15 @@ class SionnaAdapter:
         paths = self._compute_paths_with_fallback(solver_kwargs)
         if self._visualize_rays:
             self._last_path_geometry = self._extract_path_polylines(paths)
+            if self._log_path_stats and self._last_path_geometry:
+                seg_counts = [int(max(0, len(p.get("points_xyz", [])) - 1)) for p in self._last_path_geometry]
+                los_count = sum(1 for p in self._last_path_geometry if bool(p.get("is_los", False)))
+                nlos_count = max(0, len(self._last_path_geometry) - los_count)
+                logger.info(
+                    "ray_viz paths=%d los=%d nlos=%d seg_max=%d seg_mean=%.2f",
+                    len(self._last_path_geometry), los_count, nlos_count,
+                    max(seg_counts), float(np.mean(seg_counts)),
+                )
         else:
             self._last_path_geometry = []
 
@@ -510,11 +557,17 @@ class SionnaAdapter:
         a_flat = np.asarray(a).reshape(-1)
         tau_flat = np.asarray(tau).reshape(-1)
 
+        if a_flat.size == 0 or tau_flat.size == 0:
+            a_flat = np.zeros((0,), dtype=np.complex128)
+            tau_flat = np.zeros((0,), dtype=np.float64)
+
         if self.csi_method == "sionna_cfr":
             h = paths.cfr(self._frequencies, out_type="numpy")
             h_arr = np.asarray(h)
-            if h_arr.ndim >= 1:
+            if h_arr.ndim >= 1 and h_arr.shape[0] > 0:
                 csi = h_arr.reshape(-1, h_arr.shape[-1])[0]
+            elif h_arr.ndim >= 1:
+                csi = np.zeros((self.num_subcarriers,), dtype=np.complex128)
             else:
                 csi = h_arr
         else:

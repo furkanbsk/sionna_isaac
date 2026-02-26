@@ -10,10 +10,14 @@ pipeline-friendly interface:
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
-from isaacsim_sionna.bridge.actor_motion import ActorMotionManager, angular_velocity_from_quats
+from isaacsim_sionna.bridge.actor_motion import angular_velocity_from_quats
+
+logger = logging.getLogger(__name__)
+from isaacsim_sionna.bridge.actor_motion_manager import ActorMotionBackendManager
 from isaacsim_sionna.bridge.camera_adapter import CameraAdapter
 from isaacsim_sionna.bridge.ray_visualizer import RayVisualizer
 from isaacsim_sionna.bridge.usd_to_sionna import compute_global_bbox, extract_mesh_aabbs_from_usd_file
@@ -46,7 +50,21 @@ class IsaacAdapter:
         self.tx_prim_path = prim_cfg.get("tx", "/World/tx")
         self.rx_prim_path = prim_cfg.get("rx", "/World/rx")
         self.actor_prim_paths = list(prim_cfg.get("actors", ["/World/actor_0"]))
-        self._actor_motion = ActorMotionManager(actor_motion_cfg)
+        self._actor_motion = ActorMotionBackendManager(actor_motion_cfg, root_config=config)
+        self._actor_render_cfg = actor_motion_cfg.get("render_fallback", {}) if isinstance(actor_motion_cfg, dict) else {}
+        self._actor_render_fallback_enabled = bool(self._actor_render_cfg.get("enabled", True))
+        self._actor_render_use_if_missing_or_xform_only = bool(
+            self._actor_render_cfg.get("use_if_missing_or_xform_only", True)
+        )
+        self._actor_render_prim_type = str(self._actor_render_cfg.get("prim_type", "Capsule")).strip() or "Capsule"
+        self._actor_render_radius_m = float(self._actor_render_cfg.get("radius_m", 0.35))
+        self._actor_render_height_m = float(self._actor_render_cfg.get("height_m", 1.7))
+        rgb = self._actor_render_cfg.get("color_rgb", [0.95, 0.2, 0.1])
+        if isinstance(rgb, (list, tuple)) and len(rgb) == 3:
+            self._actor_render_color_rgb = [float(rgb[0]), float(rgb[1]), float(rgb[2])]
+        else:
+            self._actor_render_color_rgb = [0.95, 0.2, 0.1]
+        self._actor_render_opacity = float(self._actor_render_cfg.get("opacity", 1.0))
         for prim_path in self._actor_motion.configured_actor_paths():
             if prim_path not in self.actor_prim_paths:
                 self.actor_prim_paths.append(prim_path)
@@ -105,7 +123,7 @@ class IsaacAdapter:
         if key in self._missing_paths_warned:
             return
         self._missing_paths_warned.add(key)
-        print(message)
+        logger.warning(message)
 
     def _create_fallback_stage(self) -> None:
         """Create a minimal deterministic stage for smoke tests."""
@@ -150,6 +168,54 @@ class IsaacAdapter:
             return False
         prim = stage.GetPrimAtPath(prim_path)
         return bool(prim and prim.IsValid())
+
+    def _is_prim_renderable(self, prim_path: str) -> bool:
+        import omni.usd
+
+        stage = omni.usd.get_context().get_stage()
+        if stage is None:
+            return False
+        prim = stage.GetPrimAtPath(prim_path)
+        if not prim or not prim.IsValid():
+            return False
+
+        render_types = {"Mesh", "Cube", "Sphere", "Capsule", "Cylinder", "Cone"}
+        if prim.GetTypeName() in render_types:
+            return True
+        for child in prim.GetChildren():
+            if child.GetTypeName() in render_types:
+                return True
+        return False
+
+    def _make_actor_visible_fallback(self, prim_path: str, idx: int) -> None:
+        z = max(0.5 * self._actor_render_height_m, 0.9)
+        pos = [2.5 + float(idx), 1.0, z]
+        self._create_prim(
+            prim_path=prim_path,
+            prim_type=self._actor_render_prim_type,
+            position=pos,
+            orientation=[1.0, 0.0, 0.0, 0.0],
+            scale=[self._actor_render_radius_m, self._actor_render_radius_m, 0.5 * self._actor_render_height_m],
+        )
+        try:
+            from pxr import Gf, UsdGeom  # pylint: disable=import-outside-toplevel
+            import omni.usd  # pylint: disable=import-outside-toplevel
+
+            stage = omni.usd.get_context().get_stage()
+            if stage is None:
+                return
+            prim = stage.GetPrimAtPath(prim_path)
+            if not prim or not prim.IsValid():
+                return
+            gprim = UsdGeom.Gprim(prim)
+            if gprim:
+                gprim.CreateDisplayColorAttr([Gf.Vec3f(*self._actor_render_color_rgb)])
+                gprim.CreateDisplayOpacityAttr([float(max(0.0, min(1.0, self._actor_render_opacity)))])
+        except Exception as exc:
+            self._warn_once(
+                f"actor_render_fallback::{prim_path}",
+                f"[IsaacAdapter] WARN: actor render fallback styling failed for '{prim_path}': {exc}",
+            )
 
     def _auto_anchor_from_bbox(self, offset_norm: list[float]) -> list[float]:
         if self._scene_bbox is None:
@@ -201,11 +267,24 @@ class IsaacAdapter:
             )
 
     def _ensure_actor_prims(self) -> None:
+        if self._actor_motion.is_ira_backend():
+            return
         if not self.actor_prim_paths:
             return
         for i, actor_path in enumerate(self.actor_prim_paths):
-            if self._stage_has_prim(actor_path):
+            exists = self._stage_has_prim(actor_path)
+            if self._actor_render_fallback_enabled and self._actor_render_use_if_missing_or_xform_only:
+                if (not exists) or (not self._is_prim_renderable(actor_path)):
+                    self._make_actor_visible_fallback(actor_path, i)
+                    self._warn_once(
+                        f"actor_fallback::{actor_path}",
+                        f"[IsaacAdapter] actor render fallback applied at '{actor_path}' as {self._actor_render_prim_type}",
+                    )
+                    continue
+
+            if exists:
                 continue
+
             self._create_prim(
                 prim_path=actor_path,
                 prim_type="Xform",
@@ -299,7 +378,7 @@ class IsaacAdapter:
     def start(self) -> None:
         """Initialize Isaac Sim app/session and stage."""
         if self._simulation_app is not None:
-            print("[IsaacAdapter] start() called while already started")
+            logger.warning("start() called while already started")
             return
 
         from isaacsim import SimulationApp
@@ -327,15 +406,11 @@ class IsaacAdapter:
             try:
                 loaded = bool(self._open_stage(str(scene_usd.resolve())))
             except Exception as exc:  # pragma: no cover - runtime-dependent
-                print(f"[IsaacAdapter] WARN: failed to open USD '{scene_usd}': {exc}")
+                logger.warning("failed to open USD '%s': %s", scene_usd, exc)
                 loaded = False
 
         if loaded:
             self._stage_source = "usd"
-            self._update_stage()
-            self._update_geometry_proxy()
-            self._ensure_tx_rx_anchors()
-            self._ensure_actor_prims()
             self._update_stage()
             self._update_geometry_proxy()
         else:
@@ -345,6 +420,24 @@ class IsaacAdapter:
             self._update_stage()
             self._stage_source = "autogen"
             self._update_geometry_proxy()
+
+        runtime_cfg = self.config.get("runtime", {})
+        max_frames = int(runtime_cfg.get("max_frames", 100))
+        motion_started = self._actor_motion.start(
+            scene_usd=self.scene_usd,
+            headless=self.headless,
+            seed=self.seed,
+            max_frames=max_frames,
+        )
+        if self._actor_motion.is_ira_backend():
+            logger.info(
+                "actor_motion backend=ira active=%s init_error=%s",
+                motion_started, self._actor_motion.init_error,
+            )
+        self._ensure_tx_rx_anchors()
+        self._ensure_actor_prims()
+        self._update_stage()
+        self._update_geometry_proxy()
 
         dt = 1.0 / max(self.isaac_fps, 1.0)
         self._world = World(physics_dt=dt, rendering_dt=dt)
@@ -358,10 +451,10 @@ class IsaacAdapter:
                 ok = self._camera_adapter.initialize()
             except Exception as exc:  # pragma: no cover - runtime dependent
                 ok = False
-                print(f"[IsaacAdapter] WARN: camera initialization crashed: {exc}")
+                logger.warning("camera initialization crashed: %s", exc)
             if not ok:
                 err = self._camera_adapter.init_error
-                print(f"[IsaacAdapter] WARN: camera disabled due to init failure ({err})")
+                logger.warning("camera disabled due to init failure (%s)", err)
                 self._camera_adapter = None
         if self.visualize_rays and (self.render or not self._ray_viz_draw_only_when_rendering):
             self._ray_visualizer = RayVisualizer(self.config)
@@ -369,12 +462,13 @@ class IsaacAdapter:
         else:
             self._ray_visualization_ready = False
 
-        print(
-            f"[IsaacAdapter] started headless={self.headless} render={self.render} "
-            f"stage_source={self._stage_source} meshes={len(self._mesh_aabbs)} "
-            f"seed={self.seed} isaac_seeded={isaac_seeded} "
-            f"camera_enabled={self.camera_enabled} camera_ready={self._camera_adapter is not None} "
-            f"visualize_rays={self.visualize_rays} ray_viz_ready={self._ray_visualization_ready}"
+        logger.info(
+            "started headless=%s render=%s stage_source=%s meshes=%d "
+            "seed=%d isaac_seeded=%s camera_enabled=%s camera_ready=%s "
+            "visualize_rays=%s ray_viz_ready=%s",
+            self.headless, self.render, self._stage_source, len(self._mesh_aabbs),
+            self.seed, isaac_seeded, self.camera_enabled, self._camera_adapter is not None,
+            self.visualize_rays, self._ray_visualization_ready,
         )
 
     def step(self) -> None:
@@ -437,6 +531,9 @@ class IsaacAdapter:
         actors = []
         actor_poses = []
         timestamp_sim = float(self._world.current_time)
+        for prim_path in self._actor_motion.runtime_actor_paths():
+            if prim_path not in self.actor_prim_paths:
+                self.actor_prim_paths.append(prim_path)
         for prim_path in self.actor_prim_paths:
             pose = self._read_pose(prim_path)
             if pose is not None:
@@ -517,6 +614,10 @@ class IsaacAdapter:
                 pass
             self._ray_visualizer = None
             self._ray_visualization_ready = False
+        try:
+            self._actor_motion.stop()
+        except Exception:
+            pass
 
         if self._simulation_app is not None:
             try:
@@ -524,4 +625,4 @@ class IsaacAdapter:
             finally:
                 self._simulation_app = None
 
-        print("[IsaacAdapter] stopped")
+        logger.info("stopped")

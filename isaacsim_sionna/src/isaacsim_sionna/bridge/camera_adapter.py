@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 import time
 from typing import Any
 import math
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class CameraAdapter:
@@ -41,12 +44,21 @@ class CameraAdapter:
         self.image_format = str(camera_cfg.get("format", "png")).lower()
         if self.image_format not in {"png", "jpg", "jpeg"}:
             self.image_format = "png"
+        self.fov_deg = float(camera_cfg.get("fov_deg", 70.0))
+        self.clip_near_m = float(camera_cfg.get("clip_near_m", 0.05))
+        self.clip_far_m = float(camera_cfg.get("clip_far_m", 500.0))
+        self.look_at_mode = str(camera_cfg.get("look_at_mode", "target")).strip().lower()
+        if self.look_at_mode not in {"target", "orientation"}:
+            self.look_at_mode = "target"
         self.output_subdir = str(camera_cfg.get("output_subdir", "renders"))
         self.camera_name = str(camera_cfg.get("name", "camera_main"))
         self.prim_path = str(camera_cfg.get("prim_path", f"/World/{self.camera_name}"))
         self.warmup_steps = max(0, int(camera_cfg.get("warmup_steps", 1)))
         self.capture_max_attempts = max(1, int(camera_cfg.get("capture_max_attempts", 2)))
         self.capture_timeout_s = float(camera_cfg.get("capture_timeout_s", 1.0))
+        self.normalize_intensity = bool(camera_cfg.get("normalize_intensity", True))
+        self.normalize_p_low = float(camera_cfg.get("normalize_p_low", 1.0))
+        self.normalize_p_high = float(camera_cfg.get("normalize_p_high", 99.0))
         self.output_root = Path(project_cfg.get("output_root", "isaacsim_sionna/data/raw"))
 
         self._rep = None
@@ -62,7 +74,7 @@ class CameraAdapter:
         if key in self._warned_keys:
             return
         self._warned_keys.add(key)
-        print(message)
+        logger.warning(message)
 
     @property
     def init_error(self) -> str | None:
@@ -87,16 +99,18 @@ class CameraAdapter:
 
             # Replicator does not consistently expose prim_path pinning across versions.
             # We use deterministic name + pose and keep prim_path in metadata/config.
-            cam_kwargs = {
-                "position": tuple(self.position_xyz),
-            }
-            if self.orientation_rpy_deg is not None:
+            cam_kwargs = {"position": tuple(self.position_xyz)}
+            # Optional camera intrinsics that may differ across Isaac versions.
+            # We use progressive fallback if a key is unsupported.
+            cam_kwargs["fov"] = float(self.fov_deg)
+            cam_kwargs["clipping_range"] = (float(self.clip_near_m), float(self.clip_far_m))
+            if self.look_at_mode == "orientation" and self.orientation_rpy_deg is not None:
                 cam_kwargs["rotation"] = tuple(self.orientation_rpy_deg)
-            elif self.orientation_quat_wxyz is not None:
+            elif self.look_at_mode == "orientation" and self.orientation_quat_wxyz is not None:
                 cam_kwargs["rotation"] = tuple(self._quat_wxyz_to_euler_deg(self.orientation_quat_wxyz))
             else:
                 cam_kwargs["look_at"] = tuple(self.target_xyz)
-            self._camera = rep.create.camera(**cam_kwargs)
+            self._camera = self._create_camera_with_fallback(rep, cam_kwargs)
             self._render_product = rep.create.render_product(self._camera, (self.width, self.height))
             self._rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb")
             self._rgb_annotator.attach([self._render_product])
@@ -112,6 +126,23 @@ class CameraAdapter:
             self._warn_once("init_runtime", f"[CameraAdapter] WARN: camera initialization failed: {exc}")
             self.close()
             return False
+
+    @staticmethod
+    def _create_camera_with_fallback(rep: Any, cam_kwargs: dict[str, Any]) -> Any:
+        """Create a camera while gracefully dropping unsupported kwargs."""
+        kwargs = dict(cam_kwargs)
+        drop_order = ["clipping_range", "fov"]
+        for _ in range(len(drop_order) + 1):
+            try:
+                return rep.create.camera(**kwargs)
+            except TypeError:
+                if not drop_order:
+                    raise
+                key = drop_order.pop(0)
+                if key in kwargs:
+                    kwargs.pop(key)
+                # If key wasn't present, continue to next in drop_order
+        raise TypeError("Failed to create camera after exhausting fallback kwargs")
 
     @staticmethod
     def _quat_wxyz_to_euler_deg(quat_wxyz: list[float]) -> list[float]:
@@ -162,6 +193,25 @@ class CameraAdapter:
         except Exception as exc:
             raise RuntimeError("No image writer backend available (PIL/imageio)") from exc
 
+    @staticmethod
+    def _normalize_rgb(rgb: np.ndarray, p_low: float, p_high: float) -> np.ndarray:
+        arr = np.asarray(rgb, dtype=np.float32)
+        if arr.ndim != 3:
+            return np.asarray(rgb)
+        if arr.shape[-1] == 4:
+            arr = arr[:, :, :3]
+
+        # Robust percentile stretch to reduce washout in high-dynamic-range scenes.
+        q_lo = float(np.clip(p_low, 0.0, 99.999))
+        q_hi = float(np.clip(p_high, q_lo, 100.0))
+        lo = float(np.percentile(arr, q_lo))
+        hi = float(np.percentile(arr, q_hi))
+        if hi - lo <= 1e-6:
+            return np.clip(arr, 0.0, 255.0).astype(np.uint8)
+        arr = (arr - lo) / (hi - lo)
+        arr = np.clip(arr, 0.0, 1.0) * 255.0
+        return arr.astype(np.uint8)
+
     def capture(self, frame_idx: int) -> dict[str, Any] | None:
         """Capture one RGB frame and return index metadata."""
         if not self.enabled:
@@ -205,7 +255,10 @@ class CameraAdapter:
         rel = Path(self.output_subdir) / f"frame_{int(frame_idx):04d}.{ext}"
         out_path = self.output_root / rel
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        self._save_image(out_path, np.asarray(rgb), image_format=ext)
+        rgb_np = np.asarray(rgb)
+        if self.normalize_intensity:
+            rgb_np = self._normalize_rgb(rgb_np, self.normalize_p_low, self.normalize_p_high)
+        self._save_image(out_path, rgb_np, image_format=ext)
 
         return {
             "file": str(rel),
@@ -216,11 +269,17 @@ class CameraAdapter:
         }
 
     def close(self) -> None:
-        if self._rgb_annotator is not None and self._render_product is not None:
-            try:
-                self._rgb_annotator.detach([self._render_product])
-            except Exception:
-                pass
+        if self._rgb_annotator is not None:
+            if self._render_product is not None:
+                try:
+                    self._rgb_annotator.detach([self._render_product])
+                except Exception:
+                    pass
+            else:
+                try:
+                    self._rgb_annotator.detach([])
+                except Exception:
+                    pass
         self._rgb_annotator = None
         self._render_product = None
         self._camera = None

@@ -4,11 +4,18 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import pathlib
 import sys
 import traceback
 
 import yaml
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+    stream=sys.stderr,
+)
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"

@@ -7,10 +7,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import pathlib
 from typing import Any
 
 from isaacsim_sionna.exporters.hdf5_tensor_store import Hdf5TensorStore
+
+logger = logging.getLogger(__name__)
 from isaacsim_sionna.utils.run_manifest import build_manifest, write_manifest
 
 
@@ -62,7 +65,7 @@ class CsiWriter:
         self._num_rendered_frames = 0
         self._samples_hash = hashlib.sha256()
         self._runtime_metrics = None
-        print(f"[CsiWriter] writing {out_path}")
+        logger.info("writing %s", out_path)
 
         tensor_enabled = bool(self.tensor_cfg.get("enabled", False))
         if tensor_enabled:
@@ -148,7 +151,8 @@ class CsiWriter:
         activity_label = self._resolve_activity_label(frame_idx)
         if activity_label is not None:
             row["activity_label"] = activity_label
-        assert self._fp is not None
+        if self._fp is None:
+            raise RuntimeError("CsiWriter.write() called before open()")
         payload = json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n"
         self._fp.write(payload)
         self._samples_hash.update(payload.encode("utf-8"))
